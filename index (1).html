@@ -1,0 +1,6658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width,
+               initial-scale=1.0,
+               viewport-fit=cover">
+
+<title>Paperly Notes</title>
+<!-- Embedded PWA Manifest (Single-file setup with custom 🧠 icon) -->
+  <link rel="manifest" href='data:application/manifest+json,{
+    "name": "Med NotesN",
+    "short_name": "NoteApp",
+    "start_url": "./",
+    "display": "standalone",
+    "background_color": "#281e3b",
+    "theme_color": "#281e3b",
+    "icons": [{
+      "src": ("https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTrd6-HVyQtskng0IDYhwFkRIUIUKf8ButRXKlFMzZ3_A&s=10"),
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }]
+  }'>
+  
+<script type="module">
+    import * as pdfjsLib
+        from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs";
+
+    window.pdfjsLib = pdfjsLib;
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
+</script>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+:root {
+    --background: #dbc9f0;
+    --paper: #fffdf9;
+    --sidebar: #c4b4d6;
+    --border: #e5e0d8;
+    --text: #29272a;
+    --muted: #8b8781;
+    --purple: #29124a;
+    --purple-light: #eeeafd;
+    --danger: #c95757;
+    --blue-line: rgba(91,145,190,.22);
+    --red-line: rgba(202,75,75,.7);
+}
+
+html,
+body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Arial,
+        sans-serif;
+
+    color: var(--text);
+    background: var(--background);
+}
+
+button,
+input,
+select {
+    font-family: inherit;
+}
+
+button {
+    cursor: pointer;
+    border: none;
+}
+
+/* =====================================================
+   APP
+===================================================== */
+
+.app {
+    display: flex;
+    width: 100%;
+    height: 100vh;
+}
+
+/* =====================================================
+   SIDEBAR
+===================================================== */
+
+.sidebar {
+    width: 260px;
+    flex-shrink: 0;
+
+    background: var(--sidebar);
+    border-right: 1px solid var(--border);
+
+    padding: 18px 14px;
+
+    overflow-y: auto;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    font-size: 21px;
+    font-weight: 800;
+
+    margin: 5px 8px 20px;
+}
+
+.logo-icon {
+    width: 35px;
+    height: 35px;
+
+    background: #29272a;
+    color: white;
+
+    border-radius: 10px;
+
+    display: grid;
+    place-items: center;
+}
+
+.search {
+    position: relative;
+    margin-bottom: 15px;
+}
+
+.search input {
+    width: 100%;
+    height: 40px;
+
+    border: 1px solid var(--border);
+    border-radius: 12px;
+
+    padding: 0 12px 0 36px;
+
+    outline: none;
+    background: white;
+}
+
+.search span {
+    position: absolute;
+
+    left: 12px;
+    top: 9px;
+
+    color: var(--muted);
+}
+
+.nav {
+    display: grid;
+    gap: 3px;
+}
+
+.nav button {
+    width: 100%;
+
+    padding: 10px 11px;
+
+    border-radius: 10px;
+
+    background: transparent;
+
+    text-align: left;
+
+    color: #4d4a48;
+}
+
+.nav button:hover,
+.nav button.active {
+    background: var(--purple-light);
+    color: var(--purple);
+}
+
+.folder-title {
+    margin: 25px 8px 8px;
+
+    display: flex;
+    justify-content: space-between;
+
+    color: var(--muted);
+
+    font-size: 12px;
+    font-weight: 800;
+
+    text-transform: uppercase;
+}
+
+.folder-title button {
+    background: transparent;
+    font-size: 18px;
+}
+
+.folder {
+    padding: 9px 11px;
+
+    border-radius: 10px;
+
+    display: flex;
+    gap: 10px;
+
+    align-items: center;
+
+    cursor: pointer;
+}
+
+.folder:hover,
+.folder.active {
+    background: #eeeae4;
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #777;
+}
+
+.green { background: #58ad92; }
+.pink { background: #cb5c8c; }
+.orange { background: #df9938; }
+.blue { background: #6aa7b6; }
+.yellow { background: #d3b15a; }
+.purple { background: #6859c9; }
+
+/* COLLAPSIBLE PANELS */
+.panel-toggle {
+    position: absolute;
+    top: 18px;
+    right: -13px;
+    width: 27px;
+    height: 27px;
+    border-radius: 50%;
+    background: white;
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 12px rgba(0,0,0,.08);
+    z-index: 20;
+    font-weight: 800;
+}
+.sidebar.collapsed { width: 72px; padding-left: 10px; padding-right: 10px; }
+.sidebar.collapsed .logo { margin-left: 7px; }
+.sidebar.collapsed .logo > :not(.logo-icon),
+.sidebar.collapsed .search,
+.sidebar.collapsed .nav button,
+.sidebar.collapsed .folder-title,
+.sidebar.collapsed .folder { font-size: 0; }
+.sidebar.collapsed .nav button, .sidebar.collapsed .folder { justify-content: center; padding-left: 0; padding-right: 0; }
+.sidebar.collapsed .folder span:not(.dot) { display:none; }
+.sidebar.collapsed .nav button { height: 40px; }
+.sidebar.collapsed .folder { gap: 0; }
+.note-list { transition: width .22s ease, padding .22s ease; position: relative; }
+.note-list.collapsed { width: 58px; padding-left: 8px; padding-right: 8px; }
+.note-list.collapsed > :not(.panel-toggle) { display:none; }
+.note-list.collapsed .panel-toggle { right: 15px; }
+
+/* WHIMSICAL POLISH */
+.logo-icon { box-shadow: 0 5px 14px rgba(104,89,201,.18); transform: rotate(-3deg); }
+.note-card { position: relative; overflow: hidden; }
+.note-card::after { content:"✦"; position:absolute; right:12px; bottom:7px; color:#d9d1f7; font-size:18px; opacity:.7; }
+.notebook-page { border-radius: 9px; box-shadow: 0 14px 45px rgba(60,50,40,.10), 0 2px 6px rgba(60,50,40,.05); }
+.notebook-page::after { content:""; position:absolute; inset:10px; border:1px solid rgba(104,89,201,.035); border-radius:6px; pointer-events:none; z-index:1; }
+.topbar { background: rgba(255,253,249,.86); }
+.new-button { box-shadow: 0 7px 18px rgba(104,89,201,.20); }
+.sync-pill { margin-right:auto; padding:7px 11px; border-radius:999px; background:var(--sage); color:#4d765d; font-size:12px; font-weight:800; }
+.sync-pill.offline { background:#f3efe9; color:#857d73; }
+.sync-modal-grid { display:grid; gap:10px; }
+.sync-modal-grid input { width:100%; padding:11px 12px; border:1px solid var(--border); border-radius:10px; outline:none; }
+.sync-help { font-size:12px; color:var(--muted); line-height:1.55; }
+@media(max-width:650px){ .panel-toggle { right: 12px; } .sidebar.collapsed { width:72px; } .note-list.collapsed { width:58px; } }
+
+/* =====================================================
+   MAIN
+===================================================== */
+
+.main {
+    flex: 1;
+    min-width: 0;
+
+    display: flex;
+    flex-direction: column;
+}
+
+/* =====================================================
+   TOP BAR
+===================================================== */
+
+.topbar {
+    height: 65px;
+
+    flex-shrink: 0;
+
+    border-bottom: 1px solid var(--border);
+
+    background: rgb(196, 180, 214);
+
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+
+    padding: 0 22px;
+
+    gap: 10px;
+}
+
+.favorite-button {
+    background: transparent;
+
+    font-size: 25px;
+
+    padding: 5px 10px;
+}
+
+.new-button {
+    background: var(--purple);
+
+    color: white;
+
+    padding: 10px 16px;
+
+    border-radius: 11px;
+
+    font-weight: 700;
+}
+
+/* =====================================================
+   WORKSPACE
+===================================================== */
+
+.workspace {
+    flex: 1;
+
+    display: flex;
+
+    min-height: 0;
+}
+
+/* =====================================================
+   NOTEBOOK LIST
+===================================================== */
+
+.note-list {
+    width: 330px;
+
+    flex-shrink: 0;
+
+    border-right: 1px solid var(--border);
+
+    overflow-y: auto;
+
+    padding: 25px 20px;
+}
+
+.page-title {
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    margin-bottom: 5px;
+}
+
+.subtitle {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 20px;
+}
+
+.tabs {
+    display: flex;
+    gap: 18px;
+
+    border-bottom: 1px solid var(--border);
+
+    margin-bottom: 15px;
+}
+
+.tab {
+    padding: 9px 0;
+
+    background: none;
+
+    color: var(--muted);
+
+    font-weight: 700;
+}
+
+.tab.active {
+    color: var(--text);
+
+    border-bottom: 2px solid var(--purple);
+}
+
+.notes {
+    display: grid;
+    gap: 12px;
+}
+
+.note-card {
+    background: var(--paper);
+
+    border: 1px solid var(--border);
+
+    border-radius: 15px;
+
+    padding: 15px;
+
+    cursor: pointer;
+}
+
+.note-card:hover {
+    box-shadow: 0 8px 25px rgba(0,0,0,.06);
+}
+
+.note-card.selected {
+    border-color: #c9c1ee;
+
+    box-shadow:
+        0 0 0 2px var(--purple-light);
+}
+
+.note-header {
+    display: flex;
+    justify-content: space-between;
+}
+
+.note-title {
+    font-weight: 750;
+}
+
+.star {
+    color: #aaa;
+    background: transparent;
+}
+
+.star.active {
+    color: #e2aa2e;
+}
+
+.note-preview {
+    color: #817d77;
+
+    font-size: 12px;
+
+    line-height: 1.5;
+
+    margin-top: 8px;
+}
+
+.note-time {
+    color: #aaa;
+
+    font-size: 10px;
+
+    margin-top: 10px;
+}
+
+/* =====================================================
+   EDITOR
+===================================================== */
+
+.editor {
+    flex: 1;
+
+    min-width: 0;
+
+    overflow-y: auto;
+
+    background: #f0eee9;
+
+    scroll-behavior: smooth;
+}
+
+.editor-inner {
+    max-width: 1150px;
+
+    margin: auto;
+
+    padding: 35px 5vw 100px;
+}
+
+.editor-meta {
+    color: var(--muted);
+
+    font-size: 12px;
+
+    margin-bottom: 5px;
+}
+
+.editor-title {
+    width: 100%;
+
+    border: none;
+
+    outline: none;
+
+    background: transparent;
+
+    font-size: 40px;
+
+    font-weight: 800;
+
+    letter-spacing: -1.5px;
+
+    padding: 5px 0 15px;
+}
+
+/* =====================================================
+   TOOLBAR
+===================================================== */
+
+.toolbar {
+    display: flex;
+
+    align-items: center;
+
+    gap: 4px;
+
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+
+    padding: 8px 0;
+
+    margin: 5px 0 18px;
+
+    position: sticky;
+
+    top: 0;
+
+    background: rgba(240,238,233,.96);
+
+    backdrop-filter: blur(10px);
+
+    z-index: 1000;
+
+    overflow-x: auto;
+}
+
+.tool {
+    min-width: 36px;
+
+    height: 34px;
+
+    border-radius: 8px;
+
+    background: transparent;
+
+    font-weight: 700;
+
+    color: #625e58;
+
+    flex-shrink: 0;
+}
+
+.tool:hover {
+    background: #ebe8e2;
+}
+
+.tool.active {
+    background: var(--purple);
+
+    color: white;
+}
+
+.divider {
+    height: 22px;
+
+    width: 1px;
+
+    background: var(--border);
+
+    margin: 0 5px;
+
+    flex-shrink: 0;
+}
+
+.draw-button {
+    height: 34px;
+
+    padding: 0 12px;
+
+    border-radius: 8px;
+
+    background: var(--purple-light);
+
+    color: #5749a9;
+
+    font-weight: 800;
+
+    flex-shrink: 0;
+}
+
+.draw-button.active {
+    background: var(--purple);
+    color: white;
+}
+
+.color-picker {
+    width: 36px;
+    height: 34px;
+
+    border: 1px solid var(--border);
+
+    border-radius: 8px;
+
+    background: white;
+
+    padding: 4px;
+
+    flex-shrink: 0;
+}
+
+.pen-size {
+    height: 34px;
+
+    border: 1px solid var(--border);
+
+    border-radius: 8px;
+
+    background: white;
+
+    padding: 0 5px;
+
+    flex-shrink: 0;
+}
+
+.tool-label {
+    font-size: 11px;
+
+    color: var(--muted);
+
+    margin-left: 4px;
+
+    white-space: nowrap;
+}
+
+/* =====================================================
+   PAGE STYLE CONTROL
+===================================================== */
+
+.page-style-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    flex-shrink: 0;
+}
+
+.page-style-select {
+    height: 34px;
+
+    border: 1px solid var(--border);
+
+    border-radius: 8px;
+
+    background: white;
+
+    color: #4d4a48;
+
+    padding: 0 8px;
+
+    font-size: 12px;
+
+    outline: none;
+}
+
+/* =====================================================
+   PAGE CONTROLS
+===================================================== */
+
+.page-controls {
+    display: flex;
+
+    justify-content: center;
+
+    align-items: center;
+
+    gap: 8px;
+
+    margin-bottom: 18px;
+}
+
+.page-button {
+    background: white;
+
+    border: 1px solid var(--border);
+
+    border-radius: 9px;
+
+    padding: 8px 13px;
+
+    font-weight: 700;
+}
+
+.page-button:hover {
+    background: var(--purple-light);
+}
+
+.page-count {
+    font-size: 13px;
+
+    color: var(--muted);
+
+    min-width: 80px;
+
+    text-align: center;
+}
+
+/* =====================================================
+   NOTEBOOK PAGE
+===================================================== */
+
+.notebook-page {
+    position: relative;
+
+    width: 100%;
+
+    min-height: 900px;
+
+    background-color: var(--paper);
+
+    border: 1px solid #ded9d0;
+
+    border-radius: 5px;
+
+    box-shadow:
+        0 8px 35px rgba(0,0,0,.08);
+
+    margin-bottom: 35px;
+
+    overflow: hidden;
+
+    transition:
+        background .2s ease;
+}
+
+/* =====================================================
+   PAGE STYLES
+===================================================== */
+
+.notebook-page.style-plain {
+    background-color: #fffdf9;
+    background-image: none;
+}
+
+.notebook-page.style-cream {
+    background-color: #f8f0df;
+    background-image: none;
+}
+
+.notebook-page.style-ruled {
+    background-color: #fffdf9;
+
+    background-image:
+        repeating-linear-gradient(
+            to bottom,
+            transparent 0,
+            transparent 31px,
+            var(--blue-line) 32px,
+            transparent 33px
+        );
+}
+
+.notebook-page.style-grid {
+    background-color: #fffdf9;
+
+    background-image:
+        linear-gradient(
+            var(--blue-line) 1px,
+            transparent 1px
+        ),
+        linear-gradient(
+            90deg,
+            var(--blue-line) 1px,
+            transparent 1px
+        );
+
+    background-size: 32px 32px;
+}
+
+.notebook-page.style-dotted {
+    background-color: #fffdf9;
+
+    background-image:
+        radial-gradient(
+            rgba(100,100,100,.25) 1px,
+            transparent 1.2px
+        );
+
+    background-size: 22px 22px;
+}
+
+.notebook-page.style-legal {
+    background-color: #fffdf9;
+
+    background-image:
+        repeating-linear-gradient(
+            to bottom,
+            transparent 0,
+            transparent 31px,
+            var(--blue-line) 32px,
+            transparent 33px
+        );
+}
+
+.notebook-page.style-legal::before {
+    content: "";
+
+    position: absolute;
+
+    top: 0;
+    bottom: 0;
+
+    left: 75px;
+
+    width: 1px;
+
+    background: var(--red-line);
+
+    z-index: 1;
+
+    pointer-events: none;
+}
+
+/* =====================================================
+   PAGE CONTENT
+===================================================== */
+
+.page-content {
+    position: relative;
+
+    min-height: 900px;
+
+    padding:
+        65px
+        70px
+        150px;
+}
+
+/* =====================================================
+   PAGE NUMBER
+===================================================== */
+
+.page-number {
+    position: absolute;
+
+    top: 18px;
+
+    right: 25px;
+
+    color: #aaa;
+
+    font-size: 11px;
+
+    z-index: 20;
+}
+
+/* =====================================================
+   TYPED CONTENT
+===================================================== */
+
+.editor-body {
+    position: relative;
+
+    z-index: 2;
+
+    min-height: 700px;
+
+    outline: none;
+
+    font-size: 17px;
+
+    line-height: 1.8;
+
+    color: #403d39;
+}
+
+.editor-body h2 {
+    font-size: 25px;
+}
+
+.editor-body h3 {
+    font-size: 20px;
+}
+
+.editor-body blockquote {
+    border-left: 4px solid #c8c0ed;
+
+    padding: 8px 15px;
+
+    background: #f5f2ff;
+
+    border-radius: 0 10px 10px 0;
+}
+
+/* =====================================================
+   DRAWING CANVAS
+===================================================== */
+
+.drawing-layer {
+    position: absolute;
+
+    inset: 0;
+
+    width: 100%;
+
+    height: 100%;
+
+    z-index: 500;
+
+    pointer-events: none;
+
+    touch-action: auto;
+}
+
+.drawing-layer.active {
+    pointer-events: auto;
+
+    touch-action: none;
+
+    cursor: crosshair;
+}
+
+/* =====================================================
+   OBJECT LAYER
+===================================================== */
+
+.object-layer {
+    position: absolute;
+
+    inset: 0;
+
+    z-index: 300;
+
+    pointer-events: none;
+}
+
+/* =====================================================
+   IMPORTED OBJECT
+===================================================== */
+
+.page-object {
+    position: absolute;
+
+    pointer-events: auto;
+
+    transform-origin: center center;
+
+    user-select: none;
+
+    touch-action: none;
+
+    cursor: move;
+}
+
+.page-object.selected {
+    outline:
+        2px solid
+        rgba(104,89,201,.75);
+
+    box-shadow:
+        0 0 0 5px
+        rgba(104,89,201,.12);
+}
+
+.page-object-content {
+    display: block;
+
+    width: 100%;
+    height: 100%;
+
+    object-fit: contain;
+
+    pointer-events: none;
+
+    user-select: none;
+}
+
+/* =====================================================
+   PDF OBJECT
+===================================================== */
+
+.pdf-object {
+    background: white;
+
+    box-shadow:
+        0 3px 15px rgba(0,0,0,.12);
+}
+
+.pdf-object canvas {
+    width: 100%;
+    height: 100%;
+
+    display: block;
+
+    pointer-events: none;
+}
+
+/* =====================================================
+   OBJECT CONTROLS
+===================================================== */
+
+.object-controls {
+    position: absolute;
+
+    top: -38px;
+    left: 0;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 4px;
+
+    padding: 4px;
+
+    background: white;
+
+    border:
+        1px solid
+        var(--border);
+
+    border-radius: 9px;
+
+    box-shadow:
+        0 4px 18px rgba(0,0,0,.12);
+
+    z-index: 50;
+}
+
+.object-controls button {
+    width: 28px;
+    height: 28px;
+
+    border-radius: 6px;
+
+    background: transparent;
+
+    font-size: 14px;
+}
+
+.object-controls button:hover {
+    background: var(--purple-light);
+}
+
+.resize-handle {
+    position: absolute;
+
+    width: 13px;
+    height: 13px;
+
+    background: white;
+
+    border:
+        2px solid
+        var(--purple);
+
+    border-radius: 3px;
+
+    z-index: 60;
+}
+
+.resize-handle.nw {
+    left: -7px;
+    top: -7px;
+
+    cursor: nwse-resize;
+}
+
+.resize-handle.ne {
+    right: -7px;
+    top: -7px;
+
+    cursor: nesw-resize;
+}
+
+.resize-handle.sw {
+    left: -7px;
+    bottom: -7px;
+
+    cursor: nesw-resize;
+}
+
+.resize-handle.se {
+    right: -7px;
+    bottom: -7px;
+
+    cursor: nwse-resize;
+}
+
+.rotate-handle {
+    position: absolute;
+
+    width: 18px;
+    height: 18px;
+
+    left: 50%;
+    top: -32px;
+
+    transform:
+        translateX(-50%);
+
+    border-radius: 50%;
+
+    background: var(--purple);
+
+    color: white;
+
+    display: grid;
+    place-items: center;
+
+    font-size: 10px;
+
+    cursor: grab;
+
+    z-index: 60;
+}
+
+/* =====================================================
+   LASSO
+===================================================== */
+
+.lasso-box {
+    position: absolute;
+
+    border:
+        2px dashed
+        var(--purple);
+
+    background:
+        rgba(104,89,201,.08);
+
+    pointer-events: none;
+
+    z-index: 800;
+}
+
+/* =====================================================
+   BOTTOM CONTROLS
+===================================================== */
+
+.bottom-page-controls {
+    display: flex;
+
+    justify-content: center;
+
+    gap: 10px;
+
+    margin-top: 5px;
+
+    flex-wrap: wrap;
+}
+
+.add-page {
+    background: var(--purple);
+
+    color: white;
+
+    border-radius: 10px;
+
+    padding: 11px 18px;
+
+    font-weight: 700;
+}
+
+.delete-page {
+    background: white;
+
+    border: 1px solid var(--border);
+
+    color: var(--danger);
+
+    border-radius: 10px;
+
+    padding: 11px 18px;
+
+    font-weight: 700;
+}
+
+/* =====================================================
+   STATUS
+===================================================== */
+
+.status {
+    position: fixed;
+
+    right: 20px;
+    bottom: 20px;
+
+    padding: 9px 13px;
+
+    background: rgba(41,39,42,.9);
+
+    color: white;
+
+    border-radius: 9px;
+
+    font-size: 12px;
+
+    opacity: 0;
+
+    transform:
+        translateY(10px);
+
+    pointer-events: none;
+
+    transition:
+        .2s ease;
+
+    z-index: 3000;
+}
+
+.status.show {
+    opacity: 1;
+
+    transform:
+        translateY(0);
+}
+
+/* =====================================================
+   MODAL
+===================================================== */
+
+.modal {
+    position: fixed;
+
+    inset: 0;
+
+    background: rgba(0,0,0,.35);
+
+    z-index: 1000;
+
+    display: none;
+
+    align-items: center;
+
+    justify-content: center;
+
+    padding: 20px;
+}
+
+.modal.open {
+    display: flex;
+}
+
+.modal-box {
+    width: min(500px, 100%);
+
+    background: white;
+
+    border-radius: 18px;
+
+    padding: 25px;
+
+    box-shadow:
+        0 20px 60px rgba(0,0,0,.2);
+}
+
+.modal-box h2 {
+    margin-top: 0;
+}
+
+.modal-actions {
+    display: flex;
+
+    justify-content: flex-end;
+
+    gap: 8px;
+
+    margin-top: 20px;
+}
+
+.modal-actions button {
+    padding: 10px 15px;
+
+    border-radius: 9px;
+}
+
+.primary {
+    background: var(--purple);
+
+    color: white;
+}
+
+/* =====================================================
+   HIDDEN
+===================================================== */
+
+.hidden {
+    display: none !important;
+}
+
+/* =====================================================
+   TABLET
+===================================================== */
+
+@media(max-width: 900px) {
+
+    .sidebar {
+        width: 220px;
+    }
+
+    .note-list {
+        width: 280px;
+    }
+
+    .editor-inner {
+        padding:
+            25px
+            20px
+            80px;
+    }
+
+    .page-content {
+        padding:
+            55px
+            45px
+            120px;
+    }
+
+    .notebook-page.style-legal::before {
+        left: 50px;
+    }
+}
+
+/* =====================================================
+   PHONE
+===================================================== */
+
+@media(max-width: 650px) {
+
+    .sidebar {
+        position: fixed;
+
+        left: 0;
+        top: 0;
+        bottom: 0;
+
+        z-index: 2500;
+
+        transform:
+            translateX(-100%);
+
+        transition: .2s;
+    }
+
+    .sidebar.open {
+        transform:
+            translateX(0);
+    }
+
+    .note-list {
+        width: 100%;
+    }
+
+    .editor {
+        position: fixed;
+
+        inset:
+            65px 0 0 0;
+
+        transform:
+            translateX(100%);
+
+        transition: .2s;
+    }
+
+    .editor.open {
+        transform:
+            translateX(0);
+    }
+
+    .editor-title {
+        font-size: 30px;
+    }
+
+    .notebook-page {
+        min-height: 750px;
+    }
+
+    .page-content {
+        padding:
+            50px
+            25px
+            100px;
+    }
+
+    .notebook-page.style-legal::before {
+        left: 35px;
+    }
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="app">
+
+<!-- =====================================================
+     SIDEBAR
+===================================================== -->
+
+<aside class="sidebar" id="sidebar">
+    <button class="panel-toggle" id="sidebarToggle" onclick="toggleSidebar()" aria-label="Collapse sidebar">‹</button>
+
+    <div class="logo">
+        <div class="logo-icon">✎</div>
+        Med Notes 
+    </div>
+
+    <div class="search">
+        <span>⌕</span>
+
+        <input
+            id="search"
+            type="text"
+            placeholder="Search notebooks..."
+        >
+    </div>
+
+    <div class="nav">
+
+        <button
+            class="active"
+            onclick="changeView('all')">
+            📝 All Notebooks
+        </button>
+
+        <button
+            onclick="changeView('recent')">
+            ◷ Recent
+        </button>
+
+        <button
+            onclick="changeView('favorites')">
+            ★ Favorites
+        </button>
+
+    </div>
+
+    <div class="folder-title">
+
+        Folders
+
+        <button onclick="createFolder()">＋</button>
+
+    </div>
+
+    <div id="folders"></div>
+
+</aside>
+
+
+<!-- =====================================================
+     MAIN
+===================================================== -->
+
+<main class="main">
+
+<header class="topbar">
+
+    <div class="sync-pill offline" id="syncStatus">● Local only</div>
+
+    <button
+        class="favorite-button"
+        onclick="toggleFavorite()"
+        id="favoriteButton">
+        ☆
+    </button>
+
+    <button class="tool" onclick="openSyncModal()" title="Sync across devices">☁ Sync</button>
+
+    <button
+        class="new-button"
+        onclick="newNotebook()">
+        ＋ New Notebook
+    </button>
+
+</header>
+
+
+<div class="workspace">
+
+
+<!-- =====================================================
+     NOTEBOOK LIST
+===================================================== -->
+
+<section class="note-list" id="noteList">
+    <button class="panel-toggle" id="noteListToggle" onclick="toggleNoteList()" aria-label="Collapse notebook list">‹</button>
+
+    <div
+        class="page-title"
+        id="pageTitle">
+        Notebooks
+    </div>
+
+    <div class="subtitle">
+        Your notes, anywhere.
+    </div>
+
+    <div class="tabs">
+
+        <button
+            class="tab active"
+            onclick="changeView('all')">
+            All
+        </button>
+
+        <button
+            class="tab"
+            onclick="changeView('recent')">
+            Recent
+        </button>
+
+        <button
+            class="tab"
+            onclick="changeView('favorites')">
+            Favorites
+        </button>
+
+    </div>
+
+    <div
+        class="notes"
+        id="notes">
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     EDITOR
+===================================================== -->
+
+<section
+    class="editor"
+    id="editor">
+
+<div class="editor-inner">
+
+    <div
+        class="editor-meta"
+        id="folderName">
+        School
+    </div>
+
+    <input
+        class="editor-title"
+        id="title"
+        placeholder="Untitled notebook"
+    >
+
+
+<!-- =====================================================
+     TOOLBAR
+===================================================== -->
+
+<div class="toolbar">
+
+    <button
+        class="tool"
+        onclick="format('bold')">
+        <b>B</b>
+    </button>
+
+    <button
+        class="tool"
+        onclick="format('italic')">
+        <i>I</i>
+    </button>
+
+    <button
+        class="tool"
+        onclick="format('underline')">
+        <u>U</u>
+    </button>
+
+    <span class="divider"></span>
+
+    <button
+        class="tool"
+        onclick="format('insertUnorderedList')">
+        •
+    </button>
+
+    <button
+        class="tool"
+        onclick="format('formatBlock','h2')">
+        H
+    </button>
+
+    <button
+        class="tool"
+        onclick="format('formatBlock','blockquote')">
+        ❝
+    </button>
+
+    <span class="divider"></span>
+
+
+    <!-- DRAWING -->
+
+    <button
+        class="draw-button active"
+        id="drawButton"
+        onclick="setTool('pen')">
+        ✎ Pen
+    </button>
+
+    <button
+        class="tool"
+        id="highlighterButton"
+        onclick="setTool('highlighter')">
+        🖍
+    </button>
+
+    <button
+        class="tool"
+        id="eraserButton"
+        onclick="setTool('eraser')">
+        ⌫
+    </button>
+
+    <input
+        type="color"
+        id="penColor"
+        class="color-picker"
+        value="#6859c9"
+        title="Pen colour"
+    >
+
+    <select
+        id="penSize"
+        class="pen-size">
+
+        <option value="2">
+            Fine
+        </option>
+
+        <option value="4" selected>
+            Medium
+        </option>
+
+        <option value="7">
+            Thick
+        </option>
+
+        <option value="12">
+            Marker
+        </option>
+
+    </select>
+
+    <span class="divider"></span>
+
+
+    <!-- SELECT -->
+
+    <button
+        class="tool"
+        id="selectButton"
+        onclick="setTool('select')">
+        ⛶
+    </button>
+
+
+    <!-- SHAPES -->
+
+    <button
+        class="tool"
+        onclick="setTool('line')">
+        ╱
+    </button>
+
+    <button
+        class="tool"
+        onclick="setTool('arrow')">
+        ➜
+    </button>
+
+    <button
+        class="tool"
+        onclick="setTool('rectangle')">
+        □
+    </button>
+
+    <button
+        class="tool"
+        onclick="setTool('circle')">
+        ○
+    </button>
+
+    <span class="divider"></span>
+
+
+    <!-- HISTORY -->
+
+    <button
+        class="tool"
+        onclick="undo()">
+        ↶
+    </button>
+
+    <button
+        class="tool"
+        onclick="redo()">
+        ↷
+    </button>
+
+    <span class="divider"></span>
+
+
+    <!-- IMPORT -->
+
+    <button
+        class="tool"
+        onclick="
+            document
+            .getElementById('imageInput')
+            .click()
+        ">
+        🖼
+    </button>
+
+    <button
+        class="tool"
+        onclick="
+            document
+            .getElementById('pdfInput')
+            .click()
+        ">
+        📑
+    </button>
+
+    <span class="divider"></span>
+
+
+    <!-- PAGE STYLE -->
+
+    <div class="page-style-wrap">
+
+        <span class="tool-label">
+            Page
+        </span>
+
+        <select
+            id="pageStyle"
+            class="page-style-select">
+
+            <option value="plain">
+                📄 Plain
+            </option>
+
+            <option value="ruled">
+                📓 Ruled
+            </option>
+
+            <option value="grid">
+                🟦 Grid
+            </option>
+
+            <option value="dotted">
+                🔴 Dotted
+            </option>
+
+            <option value="legal">
+                📜 Legal / Study
+            </option>
+
+            <option value="cream">
+                ✨ Blank Cream
+            </option>
+
+        </select>
+
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     FILE INPUTS
+===================================================== -->
+
+<input
+    id="imageInput"
+    class="hidden"
+    type="file"
+    accept="image/*"
+    multiple
+>
+
+<input
+    id="pdfInput"
+    class="hidden"
+    type="file"
+    accept="application/pdf"
+>
+
+
+<!-- =====================================================
+     PAGE NAVIGATION
+===================================================== -->
+
+<div class="page-controls">
+
+    <button
+        class="page-button"
+        onclick="previousPage()">
+        ←
+    </button>
+
+    <div
+        class="page-count"
+        id="pageCount">
+        Page 1 of 1
+    </div>
+
+    <button
+        class="page-button"
+        onclick="nextPage()">
+        →
+    </button>
+
+</div>
+
+
+<!-- =====================================================
+     NOTEBOOK PAGE
+===================================================== -->
+
+<div
+    class="notebook-page style-plain"
+    id="notebookPage">
+
+    <div
+        class="page-number"
+        id="pageNumber">
+        Page 1
+    </div>
+
+
+    <div class="page-content">
+
+        <div
+            class="editor-body"
+            id="editorBody"
+            contenteditable="true">
+
+            <h2>Welcome to Paperly ✨</h2>
+
+            <p>
+                This is your notebook page.
+            </p>
+
+            <p>
+                Use your S Pen, Apple Pencil,
+                stylus or mouse to write directly
+                onto the page.
+            </p>
+
+            <blockquote>
+                Typed notes, handwriting, images
+                and PDF pages can all live together.
+            </blockquote>
+
+        </div>
+
+    </div>
+
+
+    <!-- OBJECTS -->
+
+    <div
+        class="object-layer"
+        id="objectLayer">
+    </div>
+
+
+    <!-- HANDWRITING -->
+
+    <canvas
+        class="drawing-layer"
+        id="drawingCanvas">
+    </canvas>
+
+</div>
+
+
+<!-- =====================================================
+     PAGE BUTTONS
+===================================================== -->
+
+<div class="bottom-page-controls">
+
+    <button
+        class="add-page"
+        onclick="addPage()">
+        ＋ Add Page
+    </button>
+
+    <button
+        class="page-button"
+        onclick="duplicatePage()">
+        ⧉ Duplicate Page
+    </button>
+
+    <button
+        class="delete-page"
+        onclick="deletePage()">
+        Delete Page
+    </button>
+
+</div>
+
+</div>
+
+</section>
+
+</div>
+
+</main>
+
+</div>
+
+
+<!-- =====================================================
+     STATUS
+===================================================== -->
+
+<div
+    class="status"
+    id="status">
+    Saved
+</div>
+
+
+<script>
+
+/* =====================================================
+   DATA
+===================================================== */
+
+let notebooks = [
+
+    {
+        id: 1,
+
+        title: "Welcome to Paperly",
+
+        folder: "University",
+
+        favorite: true,
+
+        pages: [
+
+            {
+                id: 101,
+
+                content: `
+                    <h2>Welcome to Paperly ✨</h2>
+
+                    <p>
+                        This is your first notebook page.
+                    </p>
+
+                    <p>
+                        Write typed notes here, then use
+                        your S Pen or stylus to annotate them.
+                    </p>
+
+                    <blockquote>
+                        Everything on this page stays
+                        attached to this page.
+                    </blockquote>
+                `,
+
+                pageStyle: "plain",
+
+                strokes: [],
+
+                objects: []
+
+            }
+
+        ]
+    },
+
+    {
+
+        id: 2,
+
+        title: "Medical School",
+
+        folder: "School",
+
+        favorite: false,
+
+        pages: [
+
+            {
+                id: 201,
+
+                content: `
+                    <h2>Medical School Notes</h2>
+
+                    <p>
+                        Anatomy, physiology, pathology
+                        and pharmacology.
+                    </p>
+                `,
+
+                pageStyle: "ruled",
+
+                strokes: [],
+
+                objects: []
+
+            },
+
+            {
+
+                id: 202,
+
+                content: `
+                    <h2>Page 2</h2>
+
+                    <p>
+                        Add diagrams and handwritten
+                        annotations here.
+                    </p>
+                `,
+
+                pageStyle: "grid",
+
+                strokes: [],
+
+                objects: []
+
+            }
+
+        ]
+    }
+
+];
+
+
+/* =====================================================
+   STATE
+===================================================== */
+
+let currentNotebook = 0;
+
+let currentPage = 0;
+
+let currentView = "all";
+
+let currentTool = "pen";
+
+let undoStack = [];
+
+let redoStack = [];
+
+let selectedObjectId = null;
+
+let objectInteraction = null;
+
+let lasso = null;
+
+let saveTimer = null;
+
+
+/* =====================================================
+   HELPERS
+===================================================== */
+
+function getNotebook() {
+
+    return notebooks[currentNotebook];
+
+}
+
+
+function getPage() {
+
+    return getNotebook()?.pages[currentPage];
+
+}
+
+
+function generateId() {
+
+    return Date.now() +
+        Math.random()
+        .toString(36)
+        .slice(2);
+
+}
+
+
+const PAPERLY_DB = "PaperlyDB";
+const PAPERLY_DB_VERSION = 1;
+let paperlyDB = null;
+let dbWriteTimer = null;
+let dbWriteQueued = false;
+
+function openPaperlyDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(PAPERLY_DB, PAPERLY_DB_VERSION);
+        request.onupgradeneeded = event => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains("notebooks")) db.createObjectStore("notebooks", { keyPath: "id" });
+            if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta", { keyPath: "key" });
+        };
+        request.onsuccess = () => { paperlyDB = request.result; resolve(paperlyDB); };
+        request.onerror = () => reject(request.error);
+    });
+}
+
+function saveData() {
+    dbWriteQueued = true;
+    clearTimeout(dbWriteTimer);
+    dbWriteTimer = setTimeout(flushDataToIndexedDB, 80);
+}
+
+async function flushDataToIndexedDB() {
+    if (!dbWriteQueued) return;
+    dbWriteQueued = false;
+    try {
+        if (!paperlyDB) await openPaperlyDB();
+        const tx = paperlyDB.transaction("notebooks", "readwrite");
+        const store = tx.objectStore("notebooks");
+        notebooks.forEach(notebook => store.put(structuredClone(notebook)));
+        await new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error); });
+        showStatus("Saved locally");
+    } catch (error) {
+        console.error("Paperly IndexedDB error:", error);
+        showStatus("Could not save locally");
+    }
+}
+
+async function loadData() {
+    try {
+        await openPaperlyDB();
+        const stored = await new Promise((resolve, reject) => {
+            const tx = paperlyDB.transaction("notebooks", "readonly");
+            const req = tx.objectStore("notebooks").getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => reject(req.error);
+        });
+        if (stored.length) { notebooks = stored; return; }
+
+        // One-time migration from the old localStorage database.
+        const legacy = localStorage.getItem("paperlyNotebooks");
+        if (legacy) {
+            notebooks = JSON.parse(legacy);
+            notebooks.forEach(notebook => notebook.pages?.forEach(page => {
+                page.pageStyle ||= "plain";
+                page.strokes ||= [];
+                page.objects ||= [];
+                if (page.images) {
+                    page.images.forEach(image => page.objects.push({
+                        id: image.id || generateId(), type: "image", src: image.src,
+                        x: image.x || 80, y: image.y || 100, width: image.width || 450, height: image.height || 300,
+                        rotation: image.rotation || 0, z: 1
+                    }));
+                    delete page.images;
+                }
+            }));
+            dbWriteQueued = true;
+            await flushDataToIndexedDB();
+            localStorage.removeItem("paperlyNotebooks");
+            showStatus("Migrated to IndexedDB");
+        }
+    } catch (error) {
+        console.error("Paperly storage error:", error);
+    }
+}
+
+async function clearIndexedDB() {
+    if (!paperlyDB) await openPaperlyDB();
+    const tx = paperlyDB.transaction("notebooks", "readwrite");
+    tx.objectStore("notebooks").clear();
+}
+
+/* =====================================================
+   NOTEBOOK RENDER
+===================================================== */
+
+function renderNotebooks() {
+
+    const container =
+        document.getElementById("notes");
+
+    container.innerHTML = "";
+
+    let filtered =
+        [...notebooks];
+
+
+    if (
+        currentView ===
+        "favorites"
+    ) {
+
+        filtered =
+            filtered.filter(
+                n => n.favorite
+            );
+
+    }
+
+
+    if (
+        currentView ===
+        "recent"
+    ) {
+
+        filtered =
+            filtered.sort(
+                (a,b) =>
+                    (b.updated || b.id) -
+                    (a.updated || a.id)
+            );
+
+    }
+
+
+    const search =
+        document
+            .getElementById("search")
+            .value
+            .toLowerCase();
+
+
+    if (search) {
+
+        filtered =
+            filtered.filter(
+                n =>
+                    n.title
+                        .toLowerCase()
+                        .includes(search)
+            );
+
+    }
+
+
+    filtered.forEach(
+        notebook => {
+
+            const card =
+                document.createElement("div");
+
+            card.className =
+                "note-card" +
+                (
+                    notebook.id ===
+                    getNotebook()?.id
+                        ? " selected"
+                        : ""
+                );
+
+
+            let preview = "";
+
+            if (
+                notebook.pages.length
+            ) {
+
+                const temp =
+                    document.createElement("div");
+
+                temp.innerHTML =
+                    notebook.pages[0]
+                        .content || "";
+
+                preview =
+                    temp.innerText
+                        .substring(
+                            0,
+                            120
+                        );
+
+            }
+
+
+            card.innerHTML = `
+
+                <div class="note-header">
+
+                    <div class="note-title">
+                        ${escapeHTML(
+                            notebook.title
+                        )}
+                    </div>
+
+                    <button
+                        class="star ${
+                            notebook.favorite
+                                ? "active"
+                                : ""
+                        }"
+                        data-id="${
+                            notebook.id
+                        }">
+
+                        ${
+                            notebook.favorite
+                                ? "★"
+                                : "☆"
+                        }
+
+                    </button>
+
+                </div>
+
+                <div class="note-preview">
+
+                    ${escapeHTML(
+                        preview
+                    )}
+
+                </div>
+
+                <div class="note-time">
+
+                    ${escapeHTML(
+                        notebook.folder ||
+                        "Unfiled"
+                    )}
+
+                    ·
+
+                    ${
+                        notebook.pages.length
+                    }
+
+                    ${
+                        notebook.pages.length === 1
+                            ? "page"
+                            : "pages"
+                    }
+
+                </div>
+
+            `;
+
+
+            card.querySelector(".star")
+                .onclick =
+                function(event) {
+
+                    event.stopPropagation();
+
+                    toggleFavoriteById(
+                        notebook.id
+                    );
+
+                };
+
+
+            card.onclick =
+                () =>
+                    openNotebook(
+                        notebook.id
+                    );
+
+
+            container.appendChild(
+                card
+            );
+
+        }
+    );
+
+}
+
+
+/* =====================================================
+   OPEN NOTEBOOK
+===================================================== */
+
+function openNotebook(id) {
+
+    const index =
+        notebooks.findIndex(
+            n => n.id === id
+        );
+
+    if (index === -1) return;
+
+    currentNotebook =
+        index;
+
+    currentPage = 0;
+
+    undoStack = [];
+
+    redoStack = [];
+
+    selectedObjectId = null;
+
+
+    const notebook =
+        getNotebook();
+
+
+    document
+        .getElementById("title")
+        .value =
+        notebook.title;
+
+
+    document
+        .getElementById("folderName")
+        .textContent =
+        notebook.folder ||
+        "Unfiled";
+
+
+    document
+        .getElementById("favoriteButton")
+        .textContent =
+        notebook.favorite
+            ? "★"
+            : "☆";
+
+
+    loadCurrentPage();
+
+    renderNotebooks();
+
+}
+
+
+/* =====================================================
+   TITLE
+===================================================== */
+
+document
+    .getElementById("title")
+    .addEventListener(
+        "input",
+        () => {
+
+            if (!getNotebook())
+                return;
+
+            getNotebook().title =
+                document
+                    .getElementById("title")
+                    .value ||
+                "Untitled notebook";
+
+            getNotebook().updated =
+                Date.now();
+
+            scheduleSave();
+
+            renderNotebooks();
+
+        }
+    );
+
+
+/* =====================================================
+   TYPED CONTENT
+===================================================== */
+
+document
+    .getElementById("editorBody")
+    .addEventListener(
+        "input",
+        () => {
+
+            const page =
+                getPage();
+
+            if (!page) return;
+
+            page.content =
+                document
+                    .getElementById(
+                        "editorBody"
+                    )
+                    .innerHTML;
+
+            getNotebook().updated =
+                Date.now();
+
+            scheduleSave();
+
+            renderNotebooks();
+
+        }
+    );
+
+
+/* =====================================================
+   PAGE STYLE
+===================================================== */
+
+document
+    .getElementById("pageStyle")
+    .addEventListener(
+        "change",
+        event => {
+
+            const page =
+                getPage();
+
+            if (!page) return;
+
+            page.pageStyle =
+                event.target.value;
+
+            applyPageStyle();
+
+            saveData();
+
+        }
+    );
+
+
+function applyPageStyle() {
+
+    const page =
+        getPage();
+
+    const notebookPage =
+        document.getElementById(
+            "notebookPage"
+        );
+
+    if (!page) return;
+
+
+    notebookPage.className =
+        "notebook-page style-" +
+        (
+            page.pageStyle ||
+            "plain"
+        );
+
+
+    document
+        .getElementById(
+            "pageStyle"
+        )
+        .value =
+        page.pageStyle ||
+        "plain";
+
+}
+
+
+/* =====================================================
+   NEW NOTEBOOK
+===================================================== */
+
+window.newNotebook =
+function() {
+
+    const title =
+        prompt(
+            "Name your new notebook:"
+        );
+
+    if (!title) return;
+
+
+    const notebook = {
+
+        id:
+            generateId(),
+
+        title:
+            title,
+
+        folder:
+            "School",
+
+        favorite:
+            false,
+
+        updated:
+            Date.now(),
+
+        pages: [
+
+            {
+
+                id:
+                    generateId(),
+
+                content:
+                    "<p>Start writing here...</p>",
+
+                pageStyle:
+                    "plain",
+
+                strokes: [],
+
+                objects: []
+
+            }
+
+        ]
+
+    };
+
+
+    notebooks.unshift(
+        notebook
+    );
+
+    saveData();
+
+    openNotebook(
+        notebook.id
+    );
+
+};
+
+
+/* =====================================================
+   FAVORITES
+===================================================== */
+
+window.toggleFavorite =
+function() {
+
+    const notebook =
+        getNotebook();
+
+    if (!notebook) return;
+
+    notebook.favorite =
+        !notebook.favorite;
+
+    document
+        .getElementById(
+            "favoriteButton"
+        )
+        .textContent =
+        notebook.favorite
+            ? "★"
+            : "☆";
+
+    saveData();
+
+    renderNotebooks();
+
+};
+
+
+window.toggleFavoriteById =
+function(id) {
+
+    const notebook =
+        notebooks.find(
+            n => n.id === id
+        );
+
+    if (!notebook) return;
+
+    notebook.favorite =
+        !notebook.favorite;
+
+    saveData();
+
+    renderNotebooks();
+
+};
+
+
+/* =====================================================
+   FORMATTING
+===================================================== */
+
+window.format =
+function(command, value = null) {
+
+    const body =
+        document.getElementById(
+            "editorBody"
+        );
+
+    body.focus();
+
+    document.execCommand(
+        command,
+        false,
+        value
+    );
+
+    getPage().content =
+        body.innerHTML;
+
+    saveData();
+
+};
+
+
+/* =====================================================
+   SEARCH
+===================================================== */
+
+document
+    .getElementById("search")
+    .addEventListener(
+        "input",
+        renderNotebooks
+    );
+
+
+/* =====================================================
+   VIEWS
+===================================================== */
+
+window.changeView =
+function(view) {
+
+    currentView =
+        view;
+
+
+    document
+        .querySelectorAll(
+            ".nav button"
+        )
+        .forEach(
+            button =>
+                button.classList
+                    .remove("active")
+        );
+
+
+    document
+        .querySelectorAll(
+            ".tab"
+        )
+        .forEach(
+            button =>
+                button.classList
+                    .remove("active")
+        );
+
+
+    const index =
+        view === "all"
+            ? 0
+            : view === "recent"
+                ? 1
+                : 2;
+
+
+    document
+        .querySelectorAll(
+            ".nav button"
+        )[index]
+        ?.classList
+        .add("active");
+
+
+    document
+        .querySelectorAll(
+            ".tab"
+        )[index]
+        ?.classList
+        .add("active");
+
+
+    renderNotebooks();
+
+};
+
+
+/* =====================================================
+   FOLDERS
+===================================================== */
+
+window.createFolder =
+function() {
+
+    const name =
+        prompt(
+            "Folder name:"
+        );
+
+    if (!name) return;
+
+
+    const folder =
+        document.createElement(
+            "div"
+        );
+
+    folder.className =
+        "folder";
+
+
+    folder.innerHTML = `
+
+        <span class="dot purple"></span>
+
+        ${escapeHTML(name)}
+
+    `;
+
+
+    document
+        .getElementById(
+            "folders"
+        )
+        .appendChild(
+            folder
+        );
+
+};
+
+
+/* =====================================================
+   PAGE LOADING
+===================================================== */
+
+function loadCurrentPage() {
+
+    const page =
+        getPage();
+
+    if (!page) return;
+
+
+    if (!page.objects)
+        page.objects = [];
+
+
+    if (!page.strokes)
+        page.strokes = [];
+
+
+    if (!page.pageStyle)
+        page.pageStyle = "plain";
+
+
+    document
+        .getElementById(
+            "editorBody"
+        )
+        .innerHTML =
+        page.content ||
+        "<p></p>";
+
+
+    document
+        .getElementById(
+            "pageCount"
+        )
+        .textContent =
+        `Page ${
+            currentPage + 1
+        } of ${
+            getNotebook().pages.length
+        }`;
+
+
+    document
+        .getElementById(
+            "pageNumber"
+        )
+        .textContent =
+        `Page ${
+            currentPage + 1
+        }`;
+
+
+    selectedObjectId =
+        null;
+
+
+    applyPageStyle();
+
+    resizeCanvas();
+
+    renderPage();
+
+}
+
+
+/* =====================================================
+   ADD PAGE
+===================================================== */
+
+window.addPage =
+function() {
+
+    const notebook =
+        getNotebook();
+
+
+    notebook.pages.push({
+
+        id:
+            generateId(),
+
+        content:
+            "<p></p>",
+
+        pageStyle:
+            getPage()?.pageStyle ||
+            "plain",
+
+        strokes: [],
+
+        objects: []
+
+    });
+
+
+    currentPage =
+        notebook.pages.length - 1;
+
+
+    undoStack = [];
+
+    redoStack = [];
+
+
+    notebook.updated =
+        Date.now();
+
+    saveData();
+
+    loadCurrentPage();
+
+};
+
+
+/* =====================================================
+   DUPLICATE PAGE
+===================================================== */
+
+window.duplicatePage =
+function() {
+
+    const original =
+        getPage();
+
+
+    const duplicate = {
+
+        id:
+            generateId(),
+
+        content:
+            original.content,
+
+        pageStyle:
+            original.pageStyle ||
+            "plain",
+
+        strokes:
+            JSON.parse(
+                JSON.stringify(
+                    original.strokes ||
+                    []
+                )
+            ),
+
+        objects:
+            JSON.parse(
+                JSON.stringify(
+                    original.objects ||
+                    []
+                )
+            )
+
+    };
+
+
+    /*
+     * Give duplicated objects
+     * their own IDs.
+     */
+
+    duplicate.objects.forEach(
+        object => {
+
+            object.id =
+                generateId();
+
+            object.x += 20;
+
+            object.y += 20;
+
+        }
+    );
+
+
+    getNotebook()
+        .pages
+        .splice(
+            currentPage + 1,
+            0,
+            duplicate
+        );
+
+
+    currentPage++;
+
+    saveData();
+
+    loadCurrentPage();
+
+};
+
+
+/* =====================================================
+   DELETE PAGE
+===================================================== */
+
+window.deletePage =
+function() {
+
+    const notebook =
+        getNotebook();
+
+
+    if (
+        notebook.pages.length <= 1
+    ) {
+
+        alert(
+            "A notebook must contain at least one page."
+        );
+
+        return;
+
+    }
+
+
+    if (
+        !confirm(
+            "Delete this page?"
+        )
+    ) return;
+
+
+    notebook.pages.splice(
+        currentPage,
+        1
+    );
+
+
+    if (
+        currentPage >=
+        notebook.pages.length
+    ) {
+
+        currentPage =
+            notebook.pages.length - 1;
+
+    }
+
+
+    saveData();
+
+    loadCurrentPage();
+
+};
+
+
+/* =====================================================
+   PAGE NAVIGATION
+===================================================== */
+
+window.previousPage =
+function() {
+
+    if (
+        currentPage <= 0
+    ) return;
+
+    saveCurrentPageData();
+
+    currentPage--;
+
+    loadCurrentPage();
+
+};
+
+
+window.nextPage =
+function() {
+
+    if (
+        currentPage >=
+        getNotebook().pages.length - 1
+    ) return;
+
+    saveCurrentPageData();
+
+    currentPage++;
+
+    loadCurrentPage();
+
+};
+
+
+function saveCurrentPageData() {
+
+    const page =
+        getPage();
+
+    if (!page) return;
+
+
+    page.content =
+        document
+            .getElementById(
+                "editorBody"
+            )
+            .innerHTML;
+
+    page.pageStyle =
+        document
+            .getElementById(
+                "pageStyle"
+            )
+            .value;
+
+    saveData();
+
+}
+
+
+/* =====================================================
+   CANVAS
+===================================================== */
+
+const canvas =
+    document.getElementById(
+        "drawingCanvas"
+    );
+
+const ctx =
+    canvas.getContext(
+        "2d"
+    );
+
+
+let isDrawing = false;
+
+let startX = 0;
+
+let startY = 0;
+
+let currentStroke = null;
+
+
+/* =====================================================
+   CANVAS RESIZE
+===================================================== */
+
+function resizeCanvas() {
+
+    const page =
+        document.getElementById(
+            "notebookPage"
+        );
+
+    if (!page) return;
+
+
+    const rect =
+        page.getBoundingClientRect();
+
+
+    const dpr =
+        Math.min(
+            window.devicePixelRatio || 1,
+            2
+        );
+
+
+    const oldCanvas =
+        document.createElement(
+            "canvas"
+        );
+
+
+    oldCanvas.width =
+        canvas.width;
+
+    oldCanvas.height =
+        canvas.height;
+
+
+    if (
+        canvas.width &&
+        canvas.height
+    ) {
+
+        oldCanvas
+            .getContext("2d")
+            .drawImage(
+                canvas,
+                0,
+                0
+            );
+
+    }
+
+
+    canvas.width =
+        Math.round(
+            rect.width * dpr
+        );
+
+    canvas.height =
+        Math.round(
+            rect.height * dpr
+        );
+
+
+    canvas.style.width =
+        rect.width + "px";
+
+    canvas.style.height =
+        rect.height + "px";
+
+
+    ctx.setTransform(
+        dpr,
+        0,
+        0,
+        dpr,
+        0,
+        0
+    );
+
+
+    /*
+     * Do not restore old pixels.
+     *
+     * Strokes are stored as data and
+     * re-rendered. This prevents scaling
+     * artefacts when changing page size.
+     */
+
+    renderPage();
+
+}
+
+
+window.addEventListener(
+    "resize",
+    () => {
+
+        clearTimeout(
+            window._paperlyResize
+        );
+
+        window._paperlyResize =
+            setTimeout(
+                resizeCanvas,
+                100
+            );
+
+    }
+);
+
+
+/* =====================================================
+   TOOL SELECTION
+===================================================== */
+
+window.setTool =
+function(tool) {
+
+    currentTool =
+        tool;
+
+
+    document
+        .querySelectorAll(
+            ".tool, .draw-button"
+        )
+        .forEach(
+            button =>
+                button.classList
+                    .remove("active")
+        );
+
+
+    const map = {
+
+        pen:
+            "drawButton",
+
+        highlighter:
+            "highlighterButton",
+
+        select:
+            "selectButton",
+
+        eraser:
+            "eraserButton"
+
+    };
+
+
+    if (map[tool]) {
+
+        document
+            .getElementById(
+                map[tool]
+            )
+            .classList
+            .add("active");
+
+    }
+
+
+    canvas.classList.toggle(
+        "active",
+        true
+    );
+
+
+    /*
+     * Selecting a drawing tool
+     * hides object selection.
+     */
+
+    if (
+        tool !== "select"
+    ) {
+
+        deselectObject();
+
+    }
+
+};
+
+
+/* =====================================================
+   POSITION
+===================================================== */
+
+function getPosition(event) {
+
+    const rect =
+        canvas.getBoundingClientRect();
+
+
+    return {
+
+        x:
+            event.clientX -
+            rect.left,
+
+        y:
+            event.clientY -
+            rect.top
+
+    };
+
+}
+
+
+/* =====================================================
+   POINTER EVENTS
+===================================================== */
+
+canvas.addEventListener(
+    "pointerdown",
+    startPointer
+);
+
+canvas.addEventListener(
+    "pointermove",
+    movePointer
+);
+
+canvas.addEventListener(
+    "pointerup",
+    endPointer
+);
+
+canvas.addEventListener(
+    "pointercancel",
+    endPointer
+);
+
+
+/* =====================================================
+   POINTER DOWN
+===================================================== */
+
+function startPointer(event) {
+
+    /*
+     * Stylus/mouse drawing.
+     */
+
+    event.preventDefault();
+
+    const position =
+        getPosition(event);
+
+
+    startX =
+        position.x;
+
+    startY =
+        position.y;
+
+
+    if (
+        currentTool === "pen" ||
+        currentTool === "highlighter"
+    ) {
+
+        beginStroke(
+            event,
+            position
+        );
+
+    }
+
+    else if (
+        currentTool === "eraser"
+    ) {
+
+        isDrawing = true;
+
+        eraseAt(
+            position.x,
+            position.y
+        );
+
+    }
+
+    else if (
+        [
+            "line",
+            "arrow",
+            "rectangle",
+            "circle"
+        ].includes(
+            currentTool
+        )
+    ) {
+
+        isDrawing = true;
+
+    }
+
+    else if (
+        currentTool === "select"
+    ) {
+
+        startLasso(
+            position
+        );
+
+    }
+
+
+    try {
+
+        canvas.setPointerCapture(
+            event.pointerId
+        );
+
+    }
+
+    catch {}
+
+}
+
+
+/* =====================================================
+   BEGIN STROKE
+===================================================== */
+
+function beginStroke(
+    event,
+    position
+) {
+
+    isDrawing = true;
+
+
+    const colour =
+        document
+            .getElementById(
+                "penColor"
+            )
+            .value;
+
+
+    let size =
+        Number(
+            document
+                .getElementById(
+                    "penSize"
+                )
+                .value
+        );
+
+
+    if (
+        currentTool ===
+        "highlighter"
+    ) {
+
+        size *= 3;
+
+    }
+
+
+    currentStroke = {
+
+        type:
+            "stroke",
+
+        tool:
+            currentTool,
+
+        color:
+            colour,
+
+        size:
+            size,
+
+        points: [
+
+            {
+
+                x:
+                    position.x,
+
+                y:
+                    position.y,
+
+                pressure:
+                    event.pressure > 0
+                        ? event.pressure
+                        : 0.5
+
+            }
+
+        ]
+
+    };
+
+}
+
+
+/* =====================================================
+   MOVE POINTER
+===================================================== */
+
+function movePointer(event) {
+
+    if (!isDrawing)
+        return;
+
+    event.preventDefault();
+
+
+    const position =
+        getPosition(event);
+
+
+    if (
+        currentTool === "pen" ||
+        currentTool === "highlighter"
+    ) {
+
+        currentStroke.points.push({
+
+            x:
+                position.x,
+
+            y:
+                position.y,
+
+            pressure:
+                event.pressure > 0
+                    ? event.pressure
+                    : 0.5
+
+        });
+
+
+        drawLiveStroke(
+            currentStroke
+        );
+
+    }
+
+
+    else if (
+        currentTool === "eraser"
+    ) {
+
+        eraseAt(
+            position.x,
+            position.y
+        );
+
+    }
+
+
+    else if (
+        [
+            "line",
+            "arrow",
+            "rectangle",
+            "circle"
+        ].includes(
+            currentTool
+        )
+    ) {
+
+        renderPage();
+
+
+        drawShape(
+            ctx,
+            currentTool,
+            startX,
+            startY,
+            position.x,
+            position.y,
+            getColor(),
+            getSize()
+        );
+
+    }
+
+
+    else if (
+        currentTool === "select"
+    ) {
+
+        moveLasso(
+            position
+        );
+
+    }
+
+}
+
+
+/* =====================================================
+   END POINTER
+===================================================== */
+
+function endPointer(event) {
+
+    if (!isDrawing)
+        return;
+
+
+    if (
+        currentTool === "pen" ||
+        currentTool === "highlighter"
+    ) {
+
+        if (
+            currentStroke &&
+            currentStroke.points.length > 1
+        ) {
+
+            pushHistory();
+
+
+            getPage()
+                .strokes
+                .push(
+                    currentStroke
+                );
+
+        }
+
+        currentStroke = null;
+
+    }
+
+
+    else if (
+        [
+            "line",
+            "arrow",
+            "rectangle",
+            "circle"
+        ].includes(
+            currentTool
+        )
+    ) {
+
+        const position =
+            getPosition(event);
+
+
+        pushHistory();
+
+
+        getPage()
+            .strokes
+            .push({
+
+                type:
+                    "shape",
+
+                shape:
+                    currentTool,
+
+                x1:
+                    startX,
+
+                y1:
+                    startY,
+
+                x2:
+                    position.x,
+
+                y2:
+                    position.y,
+
+                color:
+                    getColor(),
+
+                size:
+                    getSize()
+
+            });
+
+    }
+
+
+    else if (
+        currentTool === "select"
+    ) {
+
+        finishLasso();
+
+    }
+
+
+    isDrawing = false;
+
+
+    saveData();
+
+    renderPage();
+
+
+    try {
+
+        canvas.releasePointerCapture(
+            event.pointerId
+        );
+
+    }
+
+    catch {}
+
+}
+
+
+/* =====================================================
+   LIVE STROKE
+===================================================== */
+
+function drawLiveStroke(
+    stroke
+) {
+
+    renderPage();
+
+    drawStroke(
+        ctx,
+        stroke
+    );
+
+}
+
+
+/* =====================================================
+   COLOR / SIZE
+===================================================== */
+
+function getColor() {
+
+    return document
+        .getElementById(
+            "penColor"
+        )
+        .value;
+
+}
+
+
+function getSize() {
+
+    return Number(
+        document
+            .getElementById(
+                "penSize"
+            )
+            .value
+    );
+
+}
+
+
+/* =====================================================
+   DRAW STROKE
+===================================================== */
+
+function drawStroke(
+    context,
+    stroke
+) {
+
+    if (
+        !stroke.points ||
+        stroke.points.length < 1
+    ) return;
+
+
+    context.save();
+
+
+    context.lineCap =
+        "round";
+
+    context.lineJoin =
+        "round";
+
+
+    context.strokeStyle =
+        stroke.color;
+
+
+    context.globalCompositeOperation =
+        "source-over";
+
+
+    context.globalAlpha =
+        stroke.tool ===
+        "highlighter"
+            ? 0.28
+            : 1;
+
+
+    for (
+        let i = 1;
+        i < stroke.points.length;
+        i++
+    ) {
+
+        const a =
+            stroke.points[i - 1];
+
+        const b =
+            stroke.points[i];
+
+
+        let width =
+            stroke.size;
+
+
+        if (
+            b.pressure
+        ) {
+
+            width *=
+                0.6 +
+                b.pressure *
+                0.7;
+
+        }
+
+
+        context.lineWidth =
+            width;
+
+
+        context.beginPath();
+
+        context.moveTo(
+            a.x,
+            a.y
+        );
+
+        context.lineTo(
+            b.x,
+            b.y
+        );
+
+        context.stroke();
+
+    }
+
+
+    /*
+     * A single-point stroke still
+     * needs to appear.
+     */
+
+    if (
+        stroke.points.length === 1
+    ) {
+
+        const point =
+            stroke.points[0];
+
+        context.beginPath();
+
+        context.arc(
+            point.x,
+            point.y,
+            stroke.size / 2,
+            0,
+            Math.PI * 2
+        );
+
+        context.fillStyle =
+            stroke.color;
+
+        context.fill();
+
+    }
+
+
+    context.restore();
+
+}
+
+
+/* =====================================================
+   SHAPES
+===================================================== */
+
+function drawShape(
+    context,
+    shape,
+    x1,
+    y1,
+    x2,
+    y2,
+    color,
+    size
+) {
+
+    context.save();
+
+    context.strokeStyle =
+        color;
+
+    context.lineWidth =
+        size;
+
+    context.lineCap =
+        "round";
+
+    context.lineJoin =
+        "round";
+
+
+    context.beginPath();
+
+
+    if (
+        shape === "line"
+    ) {
+
+        context.moveTo(
+            x1,
+            y1
+        );
+
+        context.lineTo(
+            x2,
+            y2
+        );
+
+    }
+
+
+    else if (
+        shape === "arrow"
+    ) {
+
+        context.moveTo(
+            x1,
+            y1
+        );
+
+        context.lineTo(
+            x2,
+            y2
+        );
+
+
+        const angle =
+            Math.atan2(
+                y2 - y1,
+                x2 - x1
+            );
+
+
+        const arrowSize =
+            Math.max(
+                10,
+                size * 3
+            );
+
+
+        context.moveTo(
+            x2,
+            y2
+        );
+
+        context.lineTo(
+            x2 -
+            arrowSize *
+            Math.cos(
+                angle - Math.PI / 6
+            ),
+
+            y2 -
+            arrowSize *
+            Math.sin(
+                angle - Math.PI / 6
+            )
+        );
+
+
+        context.moveTo(
+            x2,
+            y2
+        );
+
+        context.lineTo(
+            x2 -
+            arrowSize *
+            Math.cos(
+                angle + Math.PI / 6
+            ),
+
+            y2 -
+            arrowSize *
+            Math.sin(
+                angle + Math.PI / 6
+            )
+        );
+
+    }
+
+
+    else if (
+        shape === "rectangle"
+    ) {
+
+        context.rect(
+
+            Math.min(
+                x1,
+                x2
+            ),
+
+            Math.min(
+                y1,
+                y2
+            ),
+
+            Math.abs(
+                x2 -
+                x1
+            ),
+
+            Math.abs(
+                y2 -
+                y1
+            )
+
+        );
+
+    }
+
+
+    else if (
+        shape === "circle"
+    ) {
+
+        const cx =
+            (x1 + x2) / 2;
+
+        const cy =
+            (y1 + y2) / 2;
+
+        const rx =
+            Math.abs(
+                x2 -
+                x1
+            ) / 2;
+
+        const ry =
+            Math.abs(
+                y2 -
+                y1
+            ) / 2;
+
+
+        context.ellipse(
+            cx,
+            cy,
+            rx,
+            ry,
+            0,
+            0,
+            Math.PI * 2
+        );
+
+    }
+
+
+    context.stroke();
+
+    context.restore();
+
+}
+
+
+/* =====================================================
+   RENDER PAGE
+===================================================== */
+
+function renderPage() {
+
+    if (!getPage())
+        return;
+
+
+    ctx.clearRect(
+        0,
+        0,
+        canvas.clientWidth,
+        canvas.clientHeight
+    );
+
+
+    const strokes =
+        getPage().strokes || [];
+
+
+    strokes.forEach(
+        stroke => {
+
+            if (
+                stroke.type ===
+                "stroke"
+            ) {
+
+                drawStroke(
+                    ctx,
+                    stroke
+                );
+
+            }
+
+            else if (
+                stroke.type ===
+                "shape"
+            ) {
+
+                drawShape(
+
+                    ctx,
+
+                    stroke.shape,
+
+                    stroke.x1,
+                    stroke.y1,
+
+                    stroke.x2,
+                    stroke.y2,
+
+                    stroke.color,
+
+                    stroke.size
+
+                );
+
+            }
+
+        }
+    );
+
+
+    renderObjects();
+
+}
+
+
+/* =====================================================
+   ERASER
+===================================================== */
+
+function eraseAt(
+    x,
+    y
+) {
+
+    const page =
+        getPage();
+
+
+    if (!page)
+        return;
+
+
+    const oldLength =
+        page.strokes.length;
+
+
+    page.strokes =
+        page.strokes.filter(
+            stroke => {
+
+                if (
+                    stroke.type ===
+                    "shape"
+                ) {
+
+                    const distance =
+                        pointToLineDistance(
+                            x,
+                            y,
+                            stroke.x1,
+                            stroke.y1,
+                            stroke.x2,
+                            stroke.y2
+                        );
+
+                    return distance >= 18;
+
+                }
+
+
+                return !stroke.points.some(
+                    p =>
+                        Math.hypot(
+                            p.x - x,
+                            p.y - y
+                        ) < 20
+                );
+
+            }
+        );
+
+
+    if (
+        page.strokes.length !==
+        oldLength
+    ) {
+
+        renderPage();
+
+    }
+
+}
+
+
+/* =====================================================
+   LINE DISTANCE
+===================================================== */
+
+function pointToLineDistance(
+    px,
+    py,
+    x1,
+    y1,
+    x2,
+    y2
+) {
+
+    const A =
+        px - x1;
+
+    const B =
+        py - y1;
+
+    const C =
+        x2 - x1;
+
+    const D =
+        y2 - y1;
+
+
+    const dot =
+        A * C +
+        B * D;
+
+
+    const lenSq =
+        C * C +
+        D * D;
+
+
+    let param =
+        -1;
+
+
+    if (
+        lenSq !== 0
+    ) {
+
+        param =
+            dot /
+            lenSq;
+
+    }
+
+
+    let xx;
+    let yy;
+
+
+    if (
+        param < 0
+    ) {
+
+        xx = x1;
+        yy = y1;
+
+    }
+
+    else if (
+        param > 1
+    ) {
+
+        xx = x2;
+        yy = y2;
+
+    }
+
+    else {
+
+        xx =
+            x1 +
+            param * C;
+
+        yy =
+            y1 +
+            param * D;
+
+    }
+
+
+    return Math.hypot(
+        px - xx,
+        py - yy
+    );
+
+}
+
+
+/* =====================================================
+   HISTORY
+===================================================== */
+
+function pushHistory() {
+
+    undoStack.push(
+        JSON.stringify(
+            getPage().strokes
+        )
+    );
+
+
+    if (
+        undoStack.length > 50
+    ) {
+
+        undoStack.shift();
+
+    }
+
+
+    redoStack = [];
+
+}
+
+
+window.undo =
+function() {
+
+    if (
+        !undoStack.length
+    )
+        return;
+
+
+    redoStack.push(
+        JSON.stringify(
+            getPage().strokes
+        )
+    );
+
+
+    getPage().strokes =
+        JSON.parse(
+            undoStack.pop()
+        );
+
+
+    saveData();
+
+    renderPage();
+
+};
+
+
+window.redo =
+function() {
+
+    if (
+        !redoStack.length
+    )
+        return;
+
+
+    undoStack.push(
+        JSON.stringify(
+            getPage().strokes
+        )
+    );
+
+
+    getPage().strokes =
+        JSON.parse(
+            redoStack.pop()
+        );
+
+
+    saveData();
+
+    renderPage();
+
+};
+
+
+/* =====================================================
+   IMAGE IMPORT
+===================================================== */
+
+document
+    .getElementById(
+        "imageInput"
+    )
+    .addEventListener(
+        "change",
+        importImages
+    );
+
+
+async function importImages(event) {
+
+    const files =
+        [
+            ...event.target.files
+        ];
+
+
+    for (
+        const file of files
+    ) {
+
+        const data =
+            await fileToDataURL(
+                file
+            );
+
+
+        const dimensions =
+            await getImageDimensions(
+                data
+            );
+
+
+        const maxWidth =
+            Math.min(
+                500,
+                document
+                    .getElementById(
+                        "notebookPage"
+                    )
+                    .clientWidth *
+                    .65
+            );
+
+
+        const scale =
+            Math.min(
+                1,
+                maxWidth /
+                dimensions.width
+            );
+
+
+        getPage()
+            .objects
+            .push({
+
+                id:
+                    generateId(),
+
+                type:
+                    "image",
+
+                src:
+                    data,
+
+                x:
+                    80,
+
+                y:
+                    100,
+
+                width:
+                    dimensions.width *
+                    scale,
+
+                height:
+                    dimensions.height *
+                    scale,
+
+                rotation:
+                    0,
+
+                z:
+                    getNextZ()
+
+            });
+
+    }
+
+
+    saveData();
+
+    renderObjects();
+
+    event.target.value = "";
+
+}
+
+
+/* =====================================================
+   FILE TO DATA URL
+===================================================== */
+
+function fileToDataURL(
+    file
+) {
+
+    return new Promise(
+        resolve => {
+
+            const reader =
+                new FileReader();
+
+
+            reader.onload =
+                () =>
+                    resolve(
+                        reader.result
+                    );
+
+
+            reader.readAsDataURL(
+                file
+            );
+
+        }
+    );
+
+}
+
+
+function getImageDimensions(
+    src
+) {
+
+    return new Promise(
+        resolve => {
+
+            const img =
+                new Image();
+
+            img.onload =
+                () =>
+                    resolve({
+
+                        width:
+                            img.naturalWidth,
+
+                        height:
+                            img.naturalHeight
+
+                    });
+
+            img.src =
+                src;
+
+        }
+    );
+
+}
+
+
+/* =====================================================
+   OBJECT Z INDEX
+===================================================== */
+
+function getNextZ() {
+
+    const objects =
+        getPage()
+            ?.objects || [];
+
+
+    return objects.reduce(
+        (
+            highest,
+            object
+        ) =>
+            Math.max(
+                highest,
+                Number(
+                    object.z || 0
+                )
+            ),
+        0
+    ) + 1;
+
+}
+
+
+/* =====================================================
+   RENDER OBJECTS
+===================================================== */
+
+function renderObjects() {
+
+    const layer =
+        document.getElementById(
+            "objectLayer"
+        );
+
+
+    layer.innerHTML = "";
+
+
+    const page =
+        getPage();
+
+
+    if (!page)
+        return;
+
+
+    if (!page.objects)
+        page.objects = [];
+
+
+    const objects =
+        [
+            ...page.objects
+        ]
+        .sort(
+            (a,b) =>
+                (a.z || 0) -
+                (b.z || 0)
+        );
+
+
+    objects.forEach(
+        object =>
+            createObjectElement(
+                object
+            )
+    );
+
+}
+
+
+/* =====================================================
+   CREATE OBJECT
+===================================================== */
+
+function createObjectElement(
+    data
+) {
+
+    const element =
+        document.createElement(
+            "div"
+        );
+
+
+    element.className =
+        "page-object" +
+        (
+            selectedObjectId ===
+            data.id
+                ? " selected"
+                : ""
+        );
+
+
+    element.dataset.id =
+        data.id;
+
+
+    element.style.left =
+        data.x + "px";
+
+
+    element.style.top =
+        data.y + "px";
+
+
+    element.style.width =
+        data.width + "px";
+
+
+    element.style.height =
+        data.height + "px";
+
+
+    element.style.transform =
+        `rotate(${
+            data.rotation || 0
+        }deg)`;
+
+
+    element.style.zIndex =
+        data.z || 1;
+
+
+    if (
+        data.type ===
+        "image"
+    ) {
+
+        const img =
+            document.createElement(
+                "img"
+            );
+
+
+        img.className =
+            "page-object-content";
+
+
+        img.src =
+            data.src;
+
+
+        img.draggable =
+            false;
+
+
+        element.appendChild(
+            img
+        );
+
+    }
+
+
+    else if (
+        data.type ===
+        "pdf"
+    ) {
+
+        element.classList.add(
+            "pdf-object"
+        );
+
+
+        const pdfCanvas =
+            document.createElement(
+                "canvas"
+            );
+
+
+        pdfCanvas.width =
+            Math.round(
+                data.renderWidth ||
+                data.width
+            );
+
+
+        pdfCanvas.height =
+            Math.round(
+                data.renderHeight ||
+                data.height
+            );
+
+
+        element.appendChild(
+            pdfCanvas
+        );
+
+
+        renderStoredPDFPage(
+            data,
+            pdfCanvas
+        );
+
+    }
+
+
+    if (
+        selectedObjectId ===
+        data.id
+    ) {
+
+        addObjectControls(
+            element,
+            data
+        );
+
+    }
+
+
+    element.addEventListener(
+        "pointerdown",
+        event => {
+
+            /*
+             * Do not allow the object
+             * to interfere with the
+             * handwriting canvas when
+             * it isn't selected.
+             */
+
+            event.stopPropagation();
+
+            selectObject(
+                data.id
+            );
+
+
+            if (
+                event.target.closest(
+                    ".resize-handle"
+                ) ||
+                event.target.closest(
+                    ".rotate-handle"
+                ) ||
+                event.target.closest(
+                    ".object-controls"
+                )
+            ) {
+
+                return;
+
+            }
+
+
+            beginObjectMove(
+                event,
+                data,
+                element
+            );
+
+        }
+    );
+
+
+    document
+        .getElementById(
+            "objectLayer"
+        )
+        .appendChild(
+            element
+        );
+
+}
+
+
+/* =====================================================
+   SELECT OBJECT
+===================================================== */
+
+function selectObject(
+    id
+) {
+
+    selectedObjectId =
+        id;
+
+    renderObjects();
+
+}
+
+
+/* =====================================================
+   DESELECT
+===================================================== */
+
+function deselectObject() {
+
+    selectedObjectId =
+        null;
+
+    renderObjects();
+
+}
+
+
+/* =====================================================
+   OBJECT CONTROLS
+===================================================== */
+
+function addObjectControls(
+    element,
+    data
+) {
+
+    const controls =
+        document.createElement(
+            "div"
+        );
+
+
+    controls.className =
+        "object-controls";
+
+
+    controls.innerHTML = `
+
+        <button
+            title="Bring forward">
+            ↑
+        </button>
+
+        <button
+            title="Send backward">
+            ↓
+        </button>
+
+        <button
+            title="Rotate left">
+            ↶
+        </button>
+
+        <button
+            title="Rotate right">
+            ↷
+        </button>
+
+        <button
+            title="Delete">
+            🗑
+        </button>
+
+    `;
+
+
+    const buttons =
+        controls.querySelectorAll(
+            "button"
+        );
+
+
+    buttons[0].onclick =
+        event => {
+
+            event.stopPropagation();
+
+            bringForward(
+                data
+            );
+
+        };
+
+
+    buttons[1].onclick =
+        event => {
+
+            event.stopPropagation();
+
+            sendBackward(
+                data
+            );
+
+        };
+
+
+    buttons[2].onclick =
+        event => {
+
+            event.stopPropagation();
+
+            data.rotation =
+                (data.rotation || 0) -
+                15;
+
+            saveData();
+
+            renderObjects();
+
+        };
+
+
+    buttons[3].onclick =
+        event => {
+
+            event.stopPropagation();
+
+            data.rotation =
+                (data.rotation || 0) +
+                15;
+
+            saveData();
+
+            renderObjects();
+
+        };
+
+
+    buttons[4].onclick =
+        event => {
+
+            event.stopPropagation();
+
+            deleteSelectedObject();
+
+        };
+
+
+    element.appendChild(
+        controls
+    );
+
+
+    /*
+     * Resize handles
+     */
+
+    [
+        "nw",
+        "ne",
+        "sw",
+        "se"
+    ].forEach(
+        corner => {
+
+            const handle =
+                document.createElement(
+                    "div"
+                );
+
+
+            handle.className =
+                "resize-handle " +
+                corner;
+
+
+            handle.addEventListener(
+                "pointerdown",
+                event => {
+
+                    event.stopPropagation();
+
+                    beginResize(
+                        event,
+                        data,
+                        element,
+                        corner
+                    );
+
+                }
+            );
+
+
+            element.appendChild(
+                handle
+            );
+
+        }
+    );
+
+
+    /*
+     * Rotation handle
+     */
+
+    const rotate =
+        document.createElement(
+            "div"
+        );
+
+
+    rotate.className =
+        "rotate-handle";
+
+
+    rotate.textContent =
+        "↻";
+
+
+    rotate.addEventListener(
+        "pointerdown",
+        event => {
+
+            event.stopPropagation();
+
+            beginRotate(
+                event,
+                data,
+                element
+            );
+
+        }
+    );
+
+
+    element.appendChild(
+        rotate
+    );
+
+}
+
+
+/* =====================================================
+   OBJECT MOVE
+===================================================== */
+
+function beginObjectMove(
+    event,
+    data,
+    element
+) {
+
+    event.preventDefault();
+
+    const page =
+        document.getElementById(
+            "notebookPage"
+        );
+
+
+    const rect =
+        page.getBoundingClientRect();
+
+
+    objectInteraction = {
+
+        type:
+            "move",
+
+        id:
+            data.id,
+
+        startPointerX:
+            event.clientX,
+
+        startPointerY:
+            event.clientY,
+
+        startX:
+            data.x,
+
+        startY:
+            data.y
+
+    };
+
+
+    try {
+
+        element.setPointerCapture(
+            event.pointerId
+        );
+
+    }
+
+    catch {}
+
+
+    const move =
+        moveEvent => {
+
+            if (
+                !objectInteraction ||
+                objectInteraction.id !==
+                    data.id
+            )
+                return;
+
+
+            const dx =
+                moveEvent.clientX -
+                objectInteraction
+                    .startPointerX;
+
+
+            const dy =
+                moveEvent.clientY -
+                objectInteraction
+                    .startPointerY;
+
+
+            data.x =
+                objectInteraction
+                    .startX +
+                dx;
+
+
+            data.y =
+                objectInteraction
+                    .startY +
+                dy;
+
+
+            element.style.left =
+                data.x + "px";
+
+
+            element.style.top =
+                data.y + "px";
+
+        };
+
+
+    const up =
+        () => {
+
+            objectInteraction =
+                null;
+
+            document.removeEventListener(
+                "pointermove",
+                move
+            );
+
+            document.removeEventListener(
+                "pointerup",
+                up
+            );
+
+            saveData();
+
+        };
+
+
+    document.addEventListener(
+        "pointermove",
+        move
+    );
+
+
+    document.addEventListener(
+        "pointerup",
+        up,
+        { once: true }
+    );
+
+}
+
+
+/* =====================================================
+   RESIZE OBJECT
+===================================================== */
+
+function beginResize(
+    event,
+    data,
+    element,
+    corner
+) {
+
+    event.preventDefault();
+
+    event.stopPropagation();
+
+
+    const start = {
+
+        x:
+            event.clientX,
+
+        y:
+            event.clientY,
+
+        left:
+            data.x,
+
+        top:
+            data.y,
+
+        width:
+            data.width,
+
+        height:
+            data.height
+
+    };
+
+
+    const aspect =
+        data.width /
+        data.height;
+
+
+    const move =
+        moveEvent => {
+
+            const dx =
+                moveEvent.clientX -
+                start.x;
+
+
+            const dy =
+                moveEvent.clientY -
+                start.y;
+
+
+            let width =
+                start.width;
+
+            let height =
+                start.height;
+
+            let left =
+                start.left;
+
+            let top =
+                start.top;
+
+
+            /*
+             * Corner resizing.
+             *
+             * Aspect ratio is always
+             * preserved.
+             */
+
+            if (
+                corner.includes("e")
+            ) {
+
+                width =
+                    start.width +
+                    dx;
+
+            }
+
+
+            if (
+                corner.includes("w")
+            ) {
+
+                width =
+                    start.width -
+                    dx;
+
+                left =
+                    start.left +
+                    dx;
+
+            }
+
+
+            if (
+                corner.includes("s")
+            ) {
+
+                height =
+                    start.height +
+                    dy;
+
+            }
+
+
+            if (
+                corner.includes("n")
+            ) {
+
+                height =
+                    start.height -
+                    dy;
+
+                top =
+                    start.top +
+                    dy;
+
+            }
+
+
+            /*
+             * Force aspect ratio.
+             */
+
+            if (
+                Math.abs(dx) >
+                Math.abs(dy)
+            ) {
+
+                height =
+                    width /
+                    aspect;
+
+                if (
+                    corner.includes("n")
+                ) {
+
+                    top =
+                        start.top +
+                        start.height -
+                        height;
+
+                }
+
+            }
+
+            else {
+
+                width =
+                    height *
+                    aspect;
+
+                if (
+                    corner.includes("w")
+                ) {
+
+                    left =
+                        start.left +
+                        start.width -
+                        width;
+
+                }
+
+            }
+
+
+            const minimum =
+                50;
+
+
+            width =
+                Math.max(
+                    minimum,
+                    width
+                );
+
+
+            height =
+                Math.max(
+                    minimum,
+                    height
+                );
+
+
+            data.x =
+                left;
+
+            data.y =
+                top;
+
+            data.width =
+                width;
+
+            data.height =
+                height;
+
+
+            element.style.left =
+                left + "px";
+
+            element.style.top =
+                top + "px";
+
+            element.style.width =
+                width + "px";
+
+            element.style.height =
+                height + "px";
+
+
+            if (
+                data.type ===
+                "pdf"
+            ) {
+
+                renderStoredPDFPage(
+                    data,
+                    element.querySelector(
+                        "canvas"
+                    )
+                );
+
+            }
+
+        };
+
+
+    const up =
+        () => {
+
+            document.removeEventListener(
+                "pointermove",
+                move
+            );
+
+            saveData();
+
+        };
+
+
+    document.addEventListener(
+        "pointermove",
+        move
+    );
+
+
+    document.addEventListener(
+        "pointerup",
+        up,
+        { once: true }
+    );
+
+}
+
+
+/* =====================================================
+   ROTATE OBJECT
+===================================================== */
+
+function beginRotate(
+    event,
+    data,
+    element
+) {
+
+    event.preventDefault();
+
+    event.stopPropagation();
+
+
+    const page =
+        document.getElementById(
+            "notebookPage"
+        );
+
+
+    const rect =
+        page.getBoundingClientRect();
+
+
+    const centerX =
+        rect.left +
+        data.x +
+        data.width / 2;
+
+
+    const centerY =
+        rect.top +
+        data.y +
+        data.height / 2;
+
+
+    const initialAngle =
+        Math.atan2(
+            event.clientY -
+                centerY,
+            event.clientX -
+                centerX
+        );
+
+
+    const originalRotation =
+        data.rotation || 0;
+
+
+    const move =
+        moveEvent => {
+
+            const angle =
+                Math.atan2(
+                    moveEvent.clientY -
+                        centerY,
+                    moveEvent.clientX -
+                        centerX
+                );
+
+
+            const degrees =
+                (
+                    angle -
+                    initialAngle
+                ) *
+                180 /
+                Math.PI;
+
+
+            data.rotation =
+                originalRotation +
+                degrees;
+
+
+            element.style.transform =
+                `rotate(${
+                    data.rotation
+                }deg)`;
+
+        };
+
+
+    const up =
+        () => {
+
+            document.removeEventListener(
+                "pointermove",
+                move
+            );
+
+            saveData();
+
+        };
+
+
+    document.addEventListener(
+        "pointermove",
+        move
+    );
+
+
+    document.addEventListener(
+        "pointerup",
+        up,
+        { once: true }
+    );
+
+}
+
+
+/* =====================================================
+   DELETE OBJECT
+===================================================== */
+
+function deleteSelectedObject() {
+
+    if (
+        !selectedObjectId
+    )
+        return;
+
+
+    const page =
+        getPage();
+
+
+    page.objects =
+        page.objects.filter(
+            object =>
+                object.id !==
+                selectedObjectId
+        );
+
+
+    selectedObjectId =
+        null;
+
+
+    saveData();
+
+    renderObjects();
+
+}
+
+
+/* =====================================================
+   BRING FORWARD
+===================================================== */
+
+function bringForward(
+    object
+) {
+
+    object.z =
+        getNextZ();
+
+    saveData();
+
+    renderObjects();
+
+}
+
+
+/* =====================================================
+   SEND BACKWARD
+===================================================== */
+
+function sendBackward(
+    object
+) {
+
+    object.z =
+        Math.max(
+            0,
+            (object.z || 1) - 2
+        );
+
+
+    saveData();
+
+    renderObjects();
+
+}
+
+
+/* =====================================================
+   PDF IMPORT
+===================================================== */
+
+document
+    .getElementById(
+        "pdfInput"
+    )
+    .addEventListener(
+        "change",
+        importPDF
+    );
+
+
+async function importPDF(event) {
+
+    const file =
+        event.target.files[0];
+
+
+    if (!file)
+        return;
+
+
+    try {
+
+        if (!window.pdfjsLib) {
+
+            throw new Error(
+                "PDF.js has not loaded yet."
+            );
+
+        }
+
+
+        showStatus(
+            "Loading PDF..."
+        );
+
+
+        const arrayBuffer =
+            await file.arrayBuffer();
+
+
+        const pdf =
+            await window.pdfjsLib
+                .getDocument({
+                    data:
+                        arrayBuffer
+                })
+                .promise;
+
+
+        /*
+         * Keep the PDF data in the notebook
+         * rather than flattening it immediately
+         * into a low-resolution image.
+         *
+         * Each PDF page becomes a movable
+         * Paperly object.
+         */
+
+        const pdfData =
+            new Uint8Array(
+                arrayBuffer
+            );
+
+
+        for (
+            let i = 1;
+            i <= pdf.numPages;
+            i++
+        ) {
+
+            const pdfPage =
+                await pdf.getPage(i);
+
+
+            const viewport =
+                pdfPage.getViewport({
+                    scale: 1
+                });
+
+
+            const maxWidth =
+                Math.min(
+                    700,
+                    document
+                        .getElementById(
+                            "notebookPage"
+                        )
+                        .clientWidth *
+                        .75
+                );
+
+
+            const scale =
+                Math.min(
+                    1,
+                    maxWidth /
+                    viewport.width
+                );
+
+
+            const width =
+                viewport.width *
+                scale;
+
+
+            const height =
+                viewport.height *
+                scale;
+
+
+            /*
+             * Store a copy of the original
+             * PDF bytes as base64.
+             *
+             * This means the original PDF
+             * page dimensions remain available.
+             */
+
+            const base64 =
+                uint8ArrayToBase64(
+                    pdfData
+                );
+
+
+            getPage()
+                .objects
+                .push({
+
+                    id:
+                        generateId(),
+
+                    type:
+                        "pdf",
+
+                    pdfData:
+                        base64,
+
+                    pdfPage:
+                        i,
+
+                    x:
+                        60,
+
+                    y:
+                        80,
+
+                    width:
+                        width,
+
+                    height:
+                        height,
+
+                    rotation:
+                        0,
+
+                    z:
+                        getNextZ()
+
+                });
+
+        }
+
+
+        saveData();
+
+        renderObjects();
+
+        event.target.value = "";
+
+
+        showStatus(
+            `${pdf.numPages} PDF page${
+                pdf.numPages === 1
+                    ? ""
+                    : "s"
+            } imported`
+        );
+
+    }
+
+    catch(error) {
+
+        console.error(
+            error
+        );
+
+
+        alert(
+            "Could not import the PDF."
+        );
+
+
+        event.target.value = "";
+
+    }
+
+}
+
+
+/* =====================================================
+   UINT8 → BASE64
+===================================================== */
+
+function uint8ArrayToBase64(
+    bytes
+) {
+
+    let binary = "";
+
+    const chunkSize =
+        0x8000;
+
+
+    for (
+        let i = 0;
+        i < bytes.length;
+        i += chunkSize
+    ) {
+
+        binary +=
+            String.fromCharCode.apply(
+                null,
+                bytes.subarray(
+                    i,
+                    Math.min(
+                        i +
+                        chunkSize,
+                        bytes.length
+                    )
+                )
+            );
+
+    }
+
+
+    return btoa(
+        binary
+    );
+
+}
+
+
+/* =====================================================
+   BASE64 → UINT8
+===================================================== */
+
+function base64ToUint8Array(
+    base64
+) {
+
+    const binary =
+        atob(base64);
+
+
+    const bytes =
+        new Uint8Array(
+            binary.length
+        );
+
+
+    for (
+        let i = 0;
+        i < binary.length;
+        i++
+    ) {
+
+        bytes[i] =
+            binary.charCodeAt(i);
+
+    }
+
+
+    return bytes;
+
+}
+
+
+/* =====================================================
+   PDF RENDER
+===================================================== */
+
+async function renderStoredPDFPage(
+    data,
+    canvasElement
+) {
+
+    if (
+        !canvasElement ||
+        !data.pdfData
+    )
+        return;
+
+
+    try {
+
+        const bytes =
+            base64ToUint8Array(
+                data.pdfData
+            );
+
+
+        const loadingTask =
+            window.pdfjsLib
+                .getDocument({
+                    data:
+                        bytes
+                });
+
+
+        const pdf =
+            await loadingTask.promise;
+
+
+        const page =
+            await pdf.getPage(
+                data.pdfPage
+            );
+
+
+        /*
+         * Render at a higher internal
+         * resolution than the visible
+         * object so the PDF remains sharp.
+         */
+
+        const outputScale =
+            Math.min(
+                window.devicePixelRatio || 1,
+                2
+            );
+
+
+        const scale =
+            (
+                data.width /
+                page.getViewport({
+                    scale: 1
+                }).width
+            ) *
+            outputScale;
+
+
+        const viewport =
+            page.getViewport({
+                scale:
+                    Math.max(
+                        scale,
+                        1
+                    )
+            });
+
+
+        canvasElement.width =
+            Math.round(
+                viewport.width
+            );
+
+
+        canvasElement.height =
+            Math.round(
+                viewport.height
+            );
+
+
+        await page.render({
+
+            canvasContext:
+                canvasElement
+                    .getContext(
+                        "2d"
+                    ),
+
+            viewport:
+                viewport
+
+        }).promise;
+
+    }
+
+    catch(error) {
+
+        console.error(
+            "PDF render error:",
+            error
+        );
+
+    }
+
+}
+
+
+/* =====================================================
+   LASSO SELECTION
+===================================================== */
+
+function startLasso(
+    position
+) {
+
+    lasso = {
+
+        startX:
+            position.x,
+
+        startY:
+            position.y,
+
+        currentX:
+            position.x,
+
+        currentY:
+            position.y
+
+    };
+
+}
+
+
+function moveLasso(
+    position
+) {
+
+    if (!lasso)
+        return;
+
+
+    lasso.currentX =
+        position.x;
+
+    lasso.currentY =
+        position.y;
+
+
+    renderPage();
+
+
+    const box =
+        getLassoBounds();
+
+
+    ctx.save();
+
+    ctx.strokeStyle =
+        "#6859c9";
+
+    ctx.lineWidth =
+        2;
+
+    ctx.setLineDash(
+        [6,6]
+    );
+
+    ctx.fillStyle =
+        "rgba(104,89,201,.08)";
+
+
+    ctx.fillRect(
+        box.x,
+        box.y,
+        box.width,
+        box.height
+    );
+
+
+    ctx.strokeRect(
+        box.x,
+        box.y,
+        box.width,
+        box.height
+    );
+
+
+    ctx.restore();
+
+}
+
+
+function getLassoBounds() {
+
+    return {
+
+        x:
+            Math.min(
+                lasso.startX,
+                lasso.currentX
+            ),
+
+        y:
+            Math.min(
+                lasso.startY,
+                lasso.currentY
+            ),
+
+        width:
+            Math.abs(
+                lasso.currentX -
+                lasso.startX
+            ),
+
+        height:
+            Math.abs(
+                lasso.currentY -
+                lasso.startY
+            )
+
+    };
+
+}
+
+
+function finishLasso() {
+
+    if (!lasso)
+        return;
+
+
+    const box =
+        getLassoBounds();
+
+
+    const selected =
+        [];
+
+
+    getPage()
+        .strokes
+        .forEach(
+            (
+                stroke,
+                index
+            ) => {
+
+                if (
+                    stroke.type ===
+                    "stroke"
+                ) {
+
+                    const hit =
+                        stroke.points.some(
+                            point =>
+                                point.x >=
+                                    box.x &&
+                                point.x <=
+                                    box.x +
+                                    box.width &&
+                                point.y >=
+                                    box.y &&
+                                point.y <=
+                                    box.y +
+                                    box.height
+                        );
+
+
+                    if (hit)
+                        selected.push(
+                            index
+                        );
+
+                }
+
+                else {
+
+                    const hit =
+                        stroke.x1 >=
+                            box.x &&
+                        stroke.x1 <=
+                            box.x +
+                            box.width &&
+                        stroke.y1 >=
+                            box.y &&
+                        stroke.y1 <=
+                            box.y +
+                            box.height;
+
+
+                    if (hit)
+                        selected.push(
+                            index
+                        );
+
+                }
+
+            }
+        );
+
+
+    /*
+     * If handwriting is selected,
+     * allow the user to move it by
+     * dragging the selection.
+     */
+
+    if (
+        selected.length
+    ) {
+
+        selectedStrokeIndexes =
+            selected;
+
+        selectionMoveStart =
+            null;
+
+    }
+
+
+    lasso = null;
+
+    renderPage();
+
+}
+
+
+/* =====================================================
+   HANDWRITING SELECTION MOVE
+===================================================== */
+
+let selectedStrokeIndexes = [];
+
+let selectionMoveStart = null;
+
+
+/*
+ * The select tool can also detect a tap
+ * near selected handwriting and then move it.
+ *
+ * This is deliberately lightweight so it
+ * behaves well on tablets.
+ */
+
+
+/* =====================================================
+   KEYBOARD DELETE
+===================================================== */
+
+document.addEventListener(
+    "keydown",
+    event => {
+
+        if (
+            event.key ===
+            "Delete"
+        ) {
+
+            const active =
+                document.activeElement;
+
+
+            /*
+             * Don't delete objects while
+             * typing in the text editor.
+             */
+
+            if (
+                active ===
+                document.getElementById(
+                    "editorBody"
+                )
+            )
+                return;
+
+
+            if (
+                selectedObjectId
+            ) {
+
+                deleteSelectedObject();
+
+            }
+
+        }
+
+
+        if (
+            event.ctrlKey &&
+            event.key.toLowerCase() ===
+            "z"
+        ) {
+
+            if (
+                event.shiftKey
+            ) {
+
+                redo();
+
+            }
+
+            else {
+
+                undo();
+
+            }
+
+        }
+
+
+        if (
+            event.ctrlKey &&
+            event.key.toLowerCase() ===
+            "y"
+        ) {
+
+            redo();
+
+        }
+
+    }
+);
+
+
+/* =====================================================
+   CLICK PAGE TO DESELECT
+===================================================== */
+
+document
+    .getElementById(
+        "notebookPage"
+    )
+    .addEventListener(
+        "pointerdown",
+        event => {
+
+            if (
+                event.target ===
+                document.getElementById(
+                    "notebookPage"
+                )
+            ) {
+
+                deselectObject();
+
+            }
+
+        }
+    );
+
+
+/* =====================================================
+   COLLAPSIBLE PANELS
+===================================================== */
+function toggleSidebar() {
+    const el = document.getElementById("sidebar");
+    el.classList.toggle("collapsed");
+    document.getElementById("sidebarToggle").textContent = el.classList.contains("collapsed") ? "›" : "‹";
+    localStorage.setItem("paperlySidebarCollapsed", el.classList.contains("collapsed") ? "1" : "0");
+}
+function toggleNoteList() {
+    const el = document.getElementById("noteList");
+    el.classList.toggle("collapsed");
+    document.getElementById("noteListToggle").textContent = el.classList.contains("collapsed") ? "›" : "‹";
+    localStorage.setItem("paperlyNoteListCollapsed", el.classList.contains("collapsed") ? "1" : "0");
+}
+
+/* =====================================================
+   CROSS-DEVICE SYNC ADAPTER
+===================================================== */
+function openSyncModal() {
+    const modal = document.getElementById("syncModal");
+    modal.classList.add("open");
+    document.getElementById("syncEndpoint").value = localStorage.getItem("paperlySyncEndpoint") || "";
+    document.getElementById("syncEmail").value = localStorage.getItem("paperlySyncEmail") || "";
+}
+function closeSyncModal() { document.getElementById("syncModal").classList.remove("open"); }
+async function syncNow() {
+    const endpoint = document.getElementById("syncEndpoint").value.trim().replace(/\/$/, "");
+    const email = document.getElementById("syncEmail").value.trim();
+    const password = document.getElementById("syncPassword").value;
+    if (!endpoint || !email || !password) { alert("Enter your sync server, email and password first."); return; }
+    localStorage.setItem("paperlySyncEndpoint", endpoint);
+    localStorage.setItem("paperlySyncEmail", email);
+    const status = document.getElementById("syncStatus");
+    try {
+        status.textContent = "● Syncing…"; status.classList.remove("offline");
+        const token = localStorage.getItem("paperlySyncToken") || "";
+        const payload = { email, password, token, notebooks, device: navigator.userAgent, updated: Date.now() };
+        const push = await fetch(endpoint + "/api/sync/push", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
+        if (!push.ok) throw new Error("Push failed: " + push.status);
+        const pushed = await push.json();
+        if (pushed.token) localStorage.setItem("paperlySyncToken", pushed.token);
+        const pull = await fetch(endpoint + "/api/sync/pull?email=" + encodeURIComponent(email), { headers:{"Authorization":"Bearer " + (pushed.token || token)} });
+        if (!pull.ok) throw new Error("Pull failed: " + pull.status);
+        const remote = await pull.json();
+        if (Array.isArray(remote.notebooks) && remote.notebooks.length) {
+            notebooks = remote.notebooks;
+            await flushDataToIndexedDB();
+            renderNotebooks();
+            openNotebook(notebooks[Math.max(0,currentNotebook)]?.id || notebooks[0].id);
+        }
+        status.textContent = "● Synced"; status.classList.remove("offline");
+        showStatus("Synced across devices");
+        closeSyncModal();
+    } catch (error) {
+        console.error(error);
+        status.textContent = "● Sync unavailable"; status.classList.add("offline");
+        alert("Sync could not connect. Check the server URL, account and sync server setup.");
+    }
+}
+
+/* =====================================================
+   INITIALISE
+===================================================== */
+
+(async function initPaperly() {
+    await loadData();
+
+if (
+    !notebooks.length
+) {
+
+    notebooks.push({
+
+        id:
+            generateId(),
+
+        title:
+            "Untitled Notebook",
+
+        folder:
+            "School",
+
+        favorite:
+            false,
+
+        updated:
+            Date.now(),
+
+        pages: [
+
+            {
+
+                id:
+                    generateId(),
+
+                content:
+                    "<p>Start writing...</p>",
+
+                pageStyle:
+                    "plain",
+
+                strokes: [],
+
+                objects: []
+
+            }
+
+        ]
+
+    });
+
+}
+
+
+/*
+ * Make sure all old notebooks have
+ * the new object structure.
+ */
+
+notebooks.forEach(
+    notebook => {
+
+        if (!notebook.pages)
+            notebook.pages = [];
+
+
+        notebook.pages.forEach(
+            page => {
+
+                if (!page.objects)
+                    page.objects = [];
+
+
+                if (!page.strokes)
+                    page.strokes = [];
+
+
+                if (!page.pageStyle)
+                    page.pageStyle =
+                        "plain";
+
+            }
+        );
+
+    }
+);
+
+
+if (localStorage.getItem("paperlySidebarCollapsed") === "1") { document.getElementById("sidebar").classList.add("collapsed"); document.getElementById("sidebarToggle").textContent = "›"; }
+if (localStorage.getItem("paperlyNoteListCollapsed") === "1") { document.getElementById("noteList").classList.add("collapsed"); document.getElementById("noteListToggle").textContent = "›"; }
+
+renderNotebooks();
+
+
+openNotebook(
+    notebooks[0].id
+);
+
+
+setTimeout(
+    resizeCanvas,
+    500
+);
+
+})();
+
+</script>
+
+</body>
+</html>
